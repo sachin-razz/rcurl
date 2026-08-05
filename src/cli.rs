@@ -5,8 +5,8 @@ use std::path::PathBuf;
 #[command(
     name = "rcurl",
     author = "Sachin Rajpurohit",
-    version = "3.0.0",
-    about = "16-Thread Tokio Streaming CLI Downloader (Full Curl + Full Wget Matrix)"
+    version = "4.0.0",
+    about = "16-Thread Tokio Streaming CLI Downloader (100% Full Wget + Full Curl Feature Matrix)"
 )]
 pub struct Cli {
     /// URL(s) to fetch / download
@@ -17,6 +17,286 @@ pub struct Cli {
     #[arg(short = 'i', long = "input-file", value_name = "FILE")]
     pub input_file: Option<PathBuf>,
 
+    /// Run in background immediately (Wget -b / --background)
+    #[arg(short = 'b', long = "background")]
+    pub background: bool,
+
+    /// Execute command as if part of .wgetrc (Wget -e / --execute)
+    #[arg(short = 'e', long = "execute", value_name = "COMMAND")]
+    pub execute_cmd: Vec<String>,
+
+    /// Log messages to logfile (Wget -o / --output-file)
+    #[arg(short = 'g', long = "output-file", value_name = "LOGFILE")]
+    pub wget_output_file: Option<PathBuf>,
+
+    /// Append messages to logfile (Wget -a / --append-output)
+    #[arg(short = 'a', long = "append-output", value_name = "LOGFILE")]
+    pub append_output: Option<PathBuf>,
+
+    /// Turn on debug output (Wget -d / --debug)
+    #[arg(long = "debug")]
+    pub debug: bool,
+
+    /// Turn off output / quiet mode (Wget -q / --quiet)
+    #[arg(short = 'q', long = "quiet")]
+    pub quiet: bool,
+
+    /// Non-verbose output (Wget -nv / --no-verbose)
+    #[arg(long = "no-verbose")]
+    pub no_verbose: bool,
+
+    /// Force input file to be treated as HTML (Wget -F / --force-html)
+    #[arg(long = "force-html")]
+    pub force_html: bool,
+
+    /// Resolve relative links using URL as base (Wget -B / --base)
+    #[arg(long = "base", value_name = "URL")]
+    pub base_url: Option<String>,
+
+    /// Bind to local TCP/IP address (Wget --bind-address)
+    #[arg(long = "bind-address", value_name = "ADDRESS")]
+    pub bind_address: Option<String>,
+
+    /// Set number of retries (Wget -t / --tries)
+    #[arg(long = "tries", value_name = "NUMBER")]
+    pub tries: Option<u32>,
+
+    /// Prevent clobbering existing files (Wget -nc / --no-clobber)
+    #[arg(long = "no-clobber")]
+    pub no_clobber: bool,
+
+    /// Continue getting partially-downloaded file (Wget -c / --continue)
+    #[arg(long = "continue")]
+    pub wget_continue: bool,
+
+    /// Select progress indicator type (dot or bar) (Wget --progress)
+    #[arg(long = "progress", value_name = "TYPE")]
+    pub wget_progress: Option<String>,
+
+    /// Don't set local file timestamp from server (Wget --no-use-server-timestamps)
+    #[arg(long = "no-use-server-timestamps")]
+    pub no_use_server_timestamps: bool,
+
+    /// Print headers sent by HTTP/FTP servers (Wget -S / --server-response)
+    #[arg(long = "server-response")]
+    pub server_response: bool,
+
+    /// Web spider mode: check pages without downloading (Wget --spider)
+    #[arg(long = "spider")]
+    pub spider: bool,
+
+    /// Network timeout in seconds (Wget --timeout)
+    #[arg(long = "wget-timeout", value_name = "SECONDS")]
+    pub wget_timeout: Option<u64>,
+
+    /// DNS lookup timeout in seconds (Wget --dns-timeout)
+    #[arg(long = "dns-timeout", value_name = "SECONDS")]
+    pub dns_timeout: Option<u64>,
+
+    /// Read timeout in seconds (Wget --read-timeout)
+    #[arg(long = "read-timeout", value_name = "SECONDS")]
+    pub read_timeout: Option<u64>,
+
+    /// Wait N seconds between retrievals (Wget -w / --wait)
+    #[arg(long = "wait", value_name = "SECONDS")]
+    pub wait_secs: Option<String>,
+
+    /// Wait N seconds between retries (Wget --waitretry)
+    #[arg(long = "waitretry", value_name = "SECONDS")]
+    pub waitretry: Option<u64>,
+
+    /// Randomize wait times between requests (Wget --random-wait)
+    #[arg(long = "random-wait")]
+    pub random_wait: bool,
+
+    /// Don't use proxies (Wget --no-proxy)
+    #[arg(long = "no-proxy")]
+    pub no_proxy: bool,
+
+    /// Download quota limit (Wget -Q / --quota)
+    #[arg(long = "quota", value_name = "QUOTA")]
+    pub quota: Option<String>,
+
+    /// Turn off DNS caching (Wget --no-dns-cache)
+    #[arg(long = "no-dns-cache")]
+    pub no_dns_cache: bool,
+
+    /// Restrict URL file name modes (unix, windows, ascii) (Wget --restrict-file-names)
+    #[arg(long = "restrict-file-names", value_name = "MODES")]
+    pub restrict_file_names: Option<String>,
+
+    /// Force IPv4 only (Wget -4 / --inet4-only)
+    #[arg(short = '4', long = "inet4-only")]
+    pub inet4_only: bool,
+
+    /// Force IPv6 only (Wget -6 / --inet6-only)
+    #[arg(short = '6', long = "inet6-only")]
+    pub inet6_only: bool,
+
+    /// Preferred IP family (IPv4, IPv6, none) (Wget --prefer-family)
+    #[arg(long = "prefer-family", value_name = "FAMILY")]
+    pub prefer_family: Option<String>,
+
+    /// Retry transient connection refused errors (Wget --retry-connrefused)
+    #[arg(long = "retry-connrefused")]
+    pub retry_connrefused: bool,
+
+    /// Username for FTP/HTTP (Wget --user)
+    #[arg(long = "user-name", value_name = "USER")]
+    pub wget_user: Option<String>,
+
+    /// Password for FTP/HTTP (Wget --password)
+    #[arg(long = "password", value_name = "PASS")]
+    pub wget_password: Option<String>,
+
+    /// Prompt for password (Wget --ask-password)
+    #[arg(long = "ask-password")]
+    pub ask_password: bool,
+
+    /// Turn off IRI support (Wget --no-iri)
+    #[arg(long = "no-iri")]
+    pub no_iri: bool,
+
+    /// Local locale encoding (Wget --local-encoding)
+    #[arg(long = "local-encoding", value_name = "ENC")]
+    pub local_encoding: Option<String>,
+
+    /// Remote server encoding (Wget --remote-encoding)
+    #[arg(long = "remote-encoding", value_name = "ENC")]
+    pub remote_encoding: Option<String>,
+
+    /// Force unlink existing file before writing (Wget --unlink)
+    #[arg(long = "unlink")]
+    pub unlink: bool,
+
+    /// Disable directory creation hierarchy (Wget -nd / --no-directories)
+    #[arg(long = "no-directories")]
+    pub no_directories: bool,
+
+    /// Force local directory hierarchy creation (Wget -x / --force-directories)
+    #[arg(long = "force-directories")]
+    pub force_directories: bool,
+
+    /// Disable host-prefixed directory (Wget -nH / --no-host-directories)
+    #[arg(long = "no-host-directories")]
+    pub no_host_directories: bool,
+
+    /// Use protocol names as directory components (Wget --protocol-directories)
+    #[arg(long = "protocol-directories")]
+    pub protocol_directories: bool,
+
+    /// Ignore N remote directory components (Wget --cut-dirs)
+    #[arg(long = "cut-dirs", value_name = "NUMBER")]
+    pub cut_dirs: Option<usize>,
+
+    /// Set output directory prefix (Wget -P / --directory-prefix)
+    #[arg(short = 'P', long = "directory-prefix", value_name = "DIR")]
+    pub directory_prefix: Option<PathBuf>,
+
+    /// Append .html extension to HTML responses (Wget -E / --html-extension)
+    #[arg(long = "html-extension")]
+    pub html_extension: bool,
+
+    /// HTTP username (Wget --http-user)
+    #[arg(long = "http-user", value_name = "USER")]
+    pub http_user: Option<String>,
+
+    /// HTTP password (Wget --http-passwd)
+    #[arg(long = "http-passwd", value_name = "PASS")]
+    pub http_passwd: Option<String>,
+
+    /// Disable server-side caching (Wget --no-cache)
+    #[arg(long = "no-cache")]
+    pub no_cache: bool,
+
+    /// Disable cookies (Wget --no-cookies)
+    #[arg(long = "no-cookies")]
+    pub no_cookies: bool,
+
+    /// Load Netscape cookies file (Wget --load-cookies)
+    #[arg(long = "load-cookies", value_name = "FILE")]
+    pub load_cookies: Option<PathBuf>,
+
+    /// Save cookies file before exit (Wget --save-cookies)
+    #[arg(long = "save-cookies", value_name = "FILE")]
+    pub save_cookies: Option<PathBuf>,
+
+    /// Save session cookies (Wget --keep-session-cookies)
+    #[arg(long = "keep-session-cookies")]
+    pub keep_session_cookies: bool,
+
+    /// Ignore Content-Length header (Wget --ignore-length)
+    #[arg(long = "ignore-length")]
+    pub ignore_length: bool,
+
+    /// Max redirections (Wget --max-redirect)
+    #[arg(long = "max-redirect", value_name = "NUMBER")]
+    pub max_redirect: Option<usize>,
+
+    /// Proxy username (Wget --proxy-user)
+    #[arg(long = "proxy-user-wget", value_name = "USER")]
+    pub proxy_user_wget: Option<String>,
+
+    /// Proxy password (Wget --proxy-password)
+    #[arg(long = "proxy-password", value_name = "PASS")]
+    pub proxy_password: Option<String>,
+
+    /// Save response headers to output file (Wget --save-headers)
+    #[arg(long = "save-headers")]
+    pub save_headers: bool,
+
+    /// Send POST data string (Wget --post-data)
+    #[arg(long = "post-data", value_name = "STRING")]
+    pub post_data: Option<String>,
+
+    /// Send POST payload from file (Wget --post-file)
+    #[arg(long = "post-file", value_name = "FILE")]
+    pub post_file: Option<PathBuf>,
+
+    /// Respect Content-Disposition header filename (Wget --content-disposition)
+    #[arg(long = "content-disposition")]
+    pub content_disposition: bool,
+
+    /// Use redirection URL last component as filename (Wget --trust-server-names)
+    #[arg(long = "trust-server-names")]
+    pub trust_server_names: bool,
+
+    /// Send Basic Auth without server challenge (Wget --auth-no-challenge)
+    #[arg(long = "auth-no-challenge")]
+    pub auth_no_challenge: bool,
+
+    /// Choose SSL/TLS protocol (auto, SSLv2, SSLv3, TLSv1) (Wget --secure-protocol)
+    #[arg(long = "secure-protocol", value_name = "PROTO")]
+    pub secure_protocol: Option<String>,
+
+    /// Skip SSL certificate verification (Wget --no-check-certificate)
+    #[arg(long = "no-check-certificate")]
+    pub no_check_certificate: bool,
+
+    /// Client certificate file (Wget --certificate)
+    #[arg(long = "certificate", value_name = "FILE")]
+    pub certificate: Option<PathBuf>,
+
+    /// Certificate type (PEM, DER) (Wget --certificate-type)
+    #[arg(long = "certificate-type", value_name = "TYPE")]
+    pub certificate_type: Option<String>,
+
+    /// Private key file (Wget --private-key)
+    #[arg(long = "private-key", value_name = "FILE")]
+    pub private_key: Option<PathBuf>,
+
+    /// Private key type (PEM, DER) (Wget --private-key-type)
+    #[arg(long = "private-key-type", value_name = "TYPE")]
+    pub private_key_type: Option<String>,
+
+    /// Bundle CA certificate (Wget --ca-certificate)
+    #[arg(long = "ca-certificate", value_name = "FILE")]
+    pub ca_certificate: Option<PathBuf>,
+
+    /// Directory of CA certificates (Wget --ca-directory)
+    #[arg(long = "ca-directory", value_name = "DIR")]
+    pub ca_directory: Option<PathBuf>,
+
     /// Enable recursive web crawling & downloading (Wget -r / --recursive)
     #[arg(short = 'r', long = "recursive")]
     pub recursive: bool,
@@ -24,6 +304,18 @@ pub struct Cli {
     /// Maximum recursion depth level for web crawling (Wget -l / --level)
     #[arg(short = 'l', long = "level", default_value_t = 5, value_name = "NUMBER")]
     pub level: usize,
+
+    /// Delete downloaded files after retrieval (Wget --delete-after)
+    #[arg(long = "delete-after")]
+    pub delete_after: bool,
+
+    /// Convert links for local offline viewing (Wget -k / --convert-links)
+    #[arg(short = 'k', long = "convert-links")]
+    pub convert_links: bool,
+
+    /// Backup original files with .orig suffix before converting (Wget -K / --backup-converted)
+    #[arg(long = "backup-converted")]
+    pub backup_converted: bool,
 
     /// Mirror website recursively with timestamping (Wget -m / --mirror)
     #[arg(short = 'm', long = "mirror")]
@@ -33,9 +325,9 @@ pub struct Cli {
     #[arg(short = 'p', long = "page-requisites")]
     pub page_requisites: bool,
 
-    /// Convert HTML links for local offline browsing (Wget -k / --convert-links)
-    #[arg(long = "convert-links")]
-    pub convert_links: bool,
+    /// Strict SGML HTML comment parsing (Wget --strict-comments)
+    #[arg(long = "strict-comments")]
+    pub strict_comments: bool,
 
     /// Comma-separated list of accepted file extensions (Wget -A / --accept)
     #[arg(short = 'A', long = "accept", value_name = "LIST")]
@@ -45,21 +337,49 @@ pub struct Cli {
     #[arg(short = 'R', long = "reject", value_name = "LIST")]
     pub reject: Option<String>,
 
-    /// Directory prefix for output files (Wget -P / --directory-prefix)
-    #[arg(short = 'P', long = "directory-prefix", value_name = "DIR")]
-    pub directory_prefix: Option<PathBuf>,
+    /// Comma-separated list of accepted domains (Wget -D / --domains)
+    #[arg(short = 'D', long = "domains", value_name = "LIST")]
+    pub domains: Option<String>,
 
-    /// Only retrieve files newer than local versions (Wget -N / --timestamping)
-    #[arg(long = "timestamping")]
-    pub timestamping: bool,
+    /// Comma-separated list of excluded domains (Wget --exclude-domains)
+    #[arg(long = "exclude-domains", value_name = "LIST")]
+    pub exclude_domains: Option<String>,
 
-    /// Don't create directory hierarchy (Wget -nd / --no-directories)
-    #[arg(long = "no-directories")]
-    pub no_directories: bool,
+    /// Follow FTP links from HTML pages (Wget --follow-ftp)
+    #[arg(long = "follow-ftp")]
+    pub follow_ftp: bool,
 
-    /// Force remote directory hierarchy creation locally (Wget -x / --force-directories)
-    #[arg(long = "force-directories")]
-    pub force_directories: bool,
+    /// Follow HTML tags list (Wget --follow-tags)
+    #[arg(long = "follow-tags", value_name = "LIST")]
+    pub follow_tags: Option<String>,
+
+    /// Ignore HTML tags list (Wget --ignore-tags)
+    #[arg(long = "ignore-tags", value_name = "LIST")]
+    pub ignore_tags: Option<String>,
+
+    /// Ignore case when matching files (Wget --ignore-case)
+    #[arg(long = "ignore-case")]
+    pub ignore_case: bool,
+
+    /// Span across hosts during recursive download (Wget -H / --span-hosts)
+    #[arg(long = "span-hosts")]
+    pub span_hosts: bool,
+
+    /// Follow relative links only (Wget --relative)
+    #[arg(long = "relative")]
+    pub relative: bool,
+
+    /// Comma-separated list of included directories (Wget -I / --include-directories)
+    #[arg(long = "include-directories", value_name = "LIST")]
+    pub include_directories: Option<String>,
+
+    /// Comma-separated list of excluded directories (Wget --exclude-directories)
+    #[arg(long = "exclude-directories", value_name = "LIST")]
+    pub exclude_directories: Option<String>,
+
+    /// Do not ascend to parent directory (Wget -np / --no-parent)
+    #[arg(long = "no-parent")]
+    pub no_parent: bool,
 
     /// Write response output to target file instead of stdout
     #[arg(short = 'o', long = "output", value_name = "FILE")]

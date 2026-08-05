@@ -1,6 +1,6 @@
 [package]
 name = "rcurl"
-version = "3.0.0"
+version = "4.0.0"
 edition = "2024"
 authors = ["Sachin Rajpurohit"]
 description = "16-Thread Tokio Streaming CLI Downloader (Full Curl + Full Wget Feature Matrix)"

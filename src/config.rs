@@ -17,28 +17,48 @@ impl RcurlConfig {
     pub fn load_default() -> Self {
         let mut config = Self::default();
 
-        // 1. Read ~/.rcurlrc or ~/.curlrc dotfile
-        if let Some(home) = dirs::home_dir() {
-            let rcurlrc = home.join(".rcurlrc");
-            let curlrc = home.join(".curlrc");
-            let config_path = if rcurlrc.exists() {
-                Some(rcurlrc)
-            } else if curlrc.exists() {
-                Some(curlrc)
-            } else {
-                None
-            };
+        // Read ~/.rcurlrc, ~/.curlrc, ~/.wgetrc, or /etc/wgetrc
+        let mut candidates = Vec::new();
 
-            if let Some(path) = config_path {
+        if let Some(home) = dirs::home_dir() {
+            candidates.push(home.join(".rcurlrc"));
+            candidates.push(home.join(".curlrc"));
+            candidates.push(home.join(".wgetrc"));
+        }
+        candidates.push(PathBuf::from("/etc/wgetrc"));
+
+        for path in candidates {
+            if path.exists() {
                 if let Ok(content) = fs::read_to_string(&path) {
                     if let Ok(cfg) = toml::from_str::<RcurlConfig>(&content) {
                         config = cfg;
+                        break;
+                    } else {
+                        // Parse key = value lines for .wgetrc / .curlrc formats
+                        for line in content.lines() {
+                            let line = line.trim();
+                            if line.is_empty() || line.starts_with('#') {
+                                continue;
+                            }
+                            if let Some((k, v)) = line.split_once('=') {
+                                let key = k.trim().to_lowercase();
+                                let val = v.trim().trim_matches('"').to_string();
+
+                                match key.as_str() {
+                                    "user_agent" | "user-agent" | "http_user" => config.user_agent = Some(val),
+                                    "proxy" | "http_proxy" | "https_proxy" => config.proxy = Some(val),
+                                    "rate_limit" | "limit_rate" => config.rate_limit = Some(val),
+                                    "threads" => config.default_threads = val.parse::<usize>().ok(),
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // 2. Read standard environment variables (HTTP_PROXY, HTTPS_PROXY, ALL_PROXY, CURL_CA_BUNDLE)
+        // Environment variables fallback
         if config.proxy.is_none() {
             config.proxy = env::var("HTTPS_PROXY")
                 .or_else(|_| env::var("https_proxy"))
