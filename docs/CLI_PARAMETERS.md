@@ -1,6 +1,6 @@
-# 📑 `rcurl` Full CLI Flags & Parameters Reference Guide
+# 📑 `rcurl` Full 140+ CLI Flags & Parameters Reference Guide
 
-This document contains the exhaustive parameter and flag reference for **`rcurl`**.
+This document contains the exhaustive reference for all **140+ CLI flags, options, and parameters** supported by `rcurl`.
 
 ---
 
