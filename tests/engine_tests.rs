@@ -5,6 +5,7 @@ use rcurl::modules::cookie::CookieStore;
 use rcurl::modules::ftp::FtpProtocolEngine;
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
+use rcurl::modules::rsync::RsyncEngine;
 use rcurl::modules::smtp::SmtpProtocolEngine;
 use rcurl::modules::socks::SocksProxyEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
@@ -29,13 +30,47 @@ fn test_cli_parsing_curl_flags() {
 }
 
 #[test]
-fn test_cli_parsing_wget_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q"];
+fn test_cli_parsing_wget_and_rsync_flags() {
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
     assert_eq!(cli.accept, Some("pdf,png".to_string()));
     assert!(cli.quiet);
+    assert!(cli.archive);
+    assert!(cli.compress);
+    assert!(cli.delete_extraneous);
+}
+
+#[test]
+fn test_rsync_engine_rolling_checksum() {
+    let data = b"Hello Rsync Rolling Checksum Algorithm!";
+    let checksum = RsyncEngine::compute_rolling_checksum(data);
+    assert!(checksum > 0);
+}
+
+#[test]
+fn test_rsync_file_sync() {
+    let temp_dir = std::env::temp_dir();
+    let src = temp_dir.join("rsync_test_src.txt");
+    let dest = temp_dir.join("rsync_test_dest.txt");
+
+    std::fs::write(&src, "Content for rsync delta sync test").unwrap();
+    if dest.exists() {
+        let _ = std::fs::remove_file(&dest);
+    }
+
+    let rsync = RsyncEngine::new();
+    let synced = rsync.sync_file(&src, &dest).unwrap();
+    assert!(synced);
+    assert_eq!(std::fs::read_to_string(&dest).unwrap(), "Content for rsync delta sync test");
+
+    // Second sync should return false (already identical)
+    let re_synced = rsync.sync_file(&src, &dest).unwrap();
+    assert!(!re_synced);
+
+    let _ = std::fs::remove_file(src);
+    let _ = std::fs::remove_file(dest);
 }
 
 #[test]

@@ -321,6 +321,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1035,13 +1045,14 @@ dependencies = [
 
 [[package]]
 name = "rcurl"
-version = "4.8.0"
+version = "5.0.0"
 dependencies = [
  "anyhow",
  "clap",
  "colored",
  "curl",
  "dirs",
+ "filetime",
  "futures-util",
  "hex",
  "indicatif",

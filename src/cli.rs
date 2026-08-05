@@ -361,6 +361,22 @@ pub struct Cli {
     #[arg(long = "ignore-case")]
     pub ignore_case: bool,
 
+    /// Rsync Archive mode (preserve permissions, times, symlinks) (Rsync --archive)
+    #[arg(long = "archive")]
+    pub archive: bool,
+
+    /// Rsync Compress file data during transfer (Rsync -z / --compress)
+    #[arg(short = 'z', long = "compress")]
+    pub compress: bool,
+
+    /// Rsync Delete extraneous files from destination dir (Rsync --delete)
+    #[arg(long = "delete")]
+    pub delete_extraneous: bool,
+
+    /// Rsync Bandwidth limit in KB/s (Rsync --bwlimit)
+    #[arg(long = "bwlimit", value_name = "KBPS")]
+    pub bwlimit: Option<u64>,
+
     /// Span across hosts during recursive download (Wget -H / --span-hosts)
     #[arg(long = "span-hosts")]
     pub span_hosts: bool,
