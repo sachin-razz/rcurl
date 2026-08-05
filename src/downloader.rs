@@ -124,6 +124,20 @@ impl CurlEngine {
             cli.method.to_uppercase()
         };
 
+        if url.starts_with("file://") || (!url.contains("://") && std::path::Path::new(url).exists()) {
+            let file_path = url.trim_start_matches("file://");
+            if let Ok(content) = fs::read(file_path).await {
+                if let Some(ref out) = cli.output {
+                    fs::write(out, &content).await.context("Failed to write output file")?;
+                } else {
+                    let mut stdout = tokio::io::stdout();
+                    use tokio::io::AsyncWriteExt;
+                    stdout.write_all(&content).await.context("Failed to write to stdout")?;
+                }
+                return Ok(());
+            }
+        }
+
         let target_file = if let Some(ref out) = cli.output {
             Some(out.clone())
         } else if cli.remote_name {
