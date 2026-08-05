@@ -1,12 +1,12 @@
 [package]
 name = "rcurl"
-version = "2.0.0"
+version = "2.0.1"
 edition = "2021"
 authors = ["Sachin Rajpurohit"]
-description = "16-Thread Tokio Streaming CLI + Native C libcurl Engine (100% Full Curl Parity)"
+description = "16-Thread Tokio Async Streaming CLI HTTP Client (Full Curl Feature Parity)"
 readme = "README.md"
 license = "MIT"
-keywords = ["cli", "curl", "libcurl", "tokio", "mimalloc"]
+keywords = ["cli", "curl", "streaming", "tokio", "http2"]
 categories = ["command-line-utilities", "asynchronous"]
 
 [dependencies]
