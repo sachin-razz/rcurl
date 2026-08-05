@@ -18,6 +18,7 @@ impl Default for QuicTransportEngine {
     }
 }
 
+#[allow(dead_code)]
 impl QuicTransportEngine {
     pub fn new() -> Self {
         Self::default()
