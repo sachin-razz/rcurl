@@ -561,6 +561,54 @@ pub struct Cli {
     #[arg(long = "no-ultraheavy", alias = "standard")]
     pub no_ultraheavy: bool,
 
+    /// Force BitTorrent P2P & Magnet Client Engine
+    #[arg(long = "torrent")]
+    pub torrent: bool,
+
+    /// Enable Private Leech Mode (Set upload rate to 0 and choke peers on 100% completion)
+    #[arg(long = "no-share", alias = "leech-only")]
+    pub no_share: bool,
+
+    /// Enable Universal Open Device-to-Device Mesh Transfer Engine
+    #[arg(long = "p2p-mesh")]
+    pub p2p_mesh: bool,
+
+    /// Send file to peer over P2P mesh
+    #[arg(long = "send", value_name = "FILE")]
+    pub send_file: Option<String>,
+
+    /// Receive file from peer using pairing PIN code
+    #[arg(long = "receive", value_name = "PIN")]
+    pub receive_pin: Option<String>,
+
+    /// Enable Tailscale & WireGuard private mesh VPN compatibility
+    #[arg(long = "tailscale-mesh")]
+    pub tailscale_mesh: bool,
+
+    /// Force gRPC / gRPC-Web binary Protobuf streaming engine
+    #[arg(long = "grpc")]
+    pub grpc: bool,
+
+    /// Transmit JSON-RPC 2.0 payload
+    #[arg(long = "json-rpc", value_name = "METHOD")]
+    pub json_rpc: Option<String>,
+
+    /// Transmit XML-RPC payload
+    #[arg(long = "xml-rpc", value_name = "METHOD")]
+    pub xml_rpc: Option<String>,
+
+    /// Load pre-trained Zstandard Shared Dictionary file
+    #[arg(long = "zstd-dict", value_name = "PATH")]
+    pub zstd_dict: Option<String>,
+
+    /// Train 32 KB Zstandard Shared Dictionary on sample payload directory
+    #[arg(long = "train-dict", value_name = "SAMPLE_DIR")]
+    pub train_dict: Option<String>,
+
+    /// Enable Kernel eBPF XDP Socket Acceleration (Linux zero-copy socket bypass)
+    #[arg(long = "ebpf-accelerator")]
+    pub ebpf_accelerator: bool,
+
     /// Enable embedded Transfer.sh Server Daemon
     #[arg(long = "transfer-server")]
     pub transfer_server: bool,

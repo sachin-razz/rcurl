@@ -1,12 +1,16 @@
 use rcurl::cli::Cli;
 use rcurl::modules::altsvc::AltSvcCache;
+use rcurl::modules::bittorrent::{MagnetUriParser, PeerWireProtocol, TorrentClient, WebSeedFallbackEngine};
 use rcurl::modules::conncache::ConnCache;
 use rcurl::modules::cookie::CookieStore;
+use rcurl::modules::ebpf_xdp::EbpfXdpEngine;
 use rcurl::modules::fastcdc::FastCdcEngine;
 use rcurl::modules::ftp::FtpProtocolEngine;
+use rcurl::modules::grpc_rpc::{GrpcEngine, JsonRpcEngine, XmlRpcEngine};
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
 use rcurl::modules::mcts_quant::{MctsChunkRouter, TurboQuantEngine};
+use rcurl::modules::p2pmesh::{IpfsNodeClient, P2pMeshEngine, TailscaleMeshClient, WebRtcDataChannel};
 use rcurl::modules::polar_subq::{PolarQuantEngine, SubQEngine};
 use rcurl::modules::rrsync::RrsyncEngine;
 use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
@@ -24,12 +28,13 @@ use rcurl::modules::vquic::quic::QuicTransportEngine;
 use rcurl::modules::vssh::ssh::SshEngine;
 use rcurl::modules::webdrive::{GoogleDriveResumableUpload, WebDriveEngine};
 use rcurl::modules::ws::WebSocketEngine;
+use rcurl::modules::zstd_dict::ZstdDictEngine;
 use clap::Parser;
 
 #[test]
 fn test_cli_parsing_curl_flags() {
     let args = vec!["rcurl", "https://httpbin.org/get", "-H", "Accept: application/json", "--http2", "--threads", "8"];
-    let cli = Cli::try_parse_from(args).unwrap();
+    let cli = Box::new(Cli::try_parse_from(args).unwrap());
     assert_eq!(cli.urls[0], "https://httpbin.org/get");
     assert_eq!(cli.headers.len(), 1);
     assert_eq!(cli.headers[0], "Accept: application/json");
@@ -38,9 +43,110 @@ fn test_cli_parsing_curl_flags() {
 }
 
 #[test]
+fn test_cli_parsing_v10_flags() {
+    let args = vec![
+        "rcurl", "magnet:?xt=urn:btih:d6a7707b8ce6bc7e13b1088b6edb633073e6da13",
+        "--torrent", "--no-share", "--p2p-mesh", "--send=file.iso", "--receive=123456", "--tailscale-mesh",
+        "--grpc", "--json-rpc=eth_blockNumber", "--xml-rpc=ping", "--zstd-dict=/tmp/api.dict", "--train-dict=/tmp/samples", "--ebpf-accelerator"
+    ];
+    let cli = Box::new(Cli::try_parse_from(args).unwrap());
+    assert!(cli.torrent);
+    assert!(cli.no_share);
+    assert!(cli.p2p_mesh);
+    assert_eq!(cli.send_file, Some("file.iso".to_string()));
+    assert_eq!(cli.receive_pin, Some("123456".to_string()));
+    assert!(cli.tailscale_mesh);
+    assert!(cli.grpc);
+    assert_eq!(cli.json_rpc, Some("eth_blockNumber".to_string()));
+    assert_eq!(cli.xml_rpc, Some("ping".to_string()));
+    assert_eq!(cli.zstd_dict, Some("/tmp/api.dict".to_string()));
+    assert_eq!(cli.train_dict, Some("/tmp/samples".to_string()));
+    assert!(cli.ebpf_accelerator);
+}
+
+#[test]
+fn test_bittorrent_magnet_and_leech_mode() {
+    let magnet = "magnet:?xt=urn:btih:d6a7707b8ce6bc7e13b1088b6edb633073e6da13&tr=udp%3A%2F%2Ftracker.opentrackr.org%3A1337";
+    let (hash, trackers) = MagnetUriParser::parse(magnet).unwrap();
+    assert_eq!(hash, "d6a7707b8ce6bc7e13b1088b6edb633073e6da13");
+    assert_eq!(trackers.len(), 1);
+
+    let pwp = PeerWireProtocol::default();
+    let handshake = pwp.build_handshake();
+    assert_eq!(handshake.len(), 68);
+
+    let choke_msg = pwp.build_leech_choke_message();
+    assert_eq!(choke_msg, vec![0, 0, 0, 1, 0]);
+
+    let client = TorrentClient::new("/tmp").with_webseeds(vec!["https://mirror.example.com".to_string()]);
+    assert!(client.no_share);
+    assert_eq!(client.webseeds.len(), 1);
+
+    let webseed = WebSeedFallbackEngine::new(client.webseeds);
+    let (hdr_k, hdr_v) = webseed.build_range_header(2, 16384);
+    assert_eq!(hdr_k, "Range");
+    assert_eq!(hdr_v, "bytes=32768-49151");
+}
+
+#[test]
+fn test_p2p_mesh_ipfs_webrtc_tailscale() {
+    let ipfs = IpfsNodeClient::new("QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco");
+    assert_eq!(ipfs.build_ipfs_gateway_url(), "https://ipfs.io/ipfs/QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco");
+
+    let webrtc = WebRtcDataChannel::new("session_123");
+    assert!(webrtc.format_offer_sdp().contains("session_123"));
+
+    let tailscale = TailscaleMeshClient::new("100.64.0.1");
+    let cmd = tailscale.build_taildrop_command(&std::path::PathBuf::from("data.bin"));
+    assert_eq!(cmd[4], "100.64.0.1:");
+
+    let pin = P2pMeshEngine::generate_pairing_pin();
+    assert_eq!(pin.len(), 6);
+}
+
+#[test]
+fn test_grpc_json_xml_rpc() {
+    let grpc = GrpcEngine::new("localhost:50051", "payment.PaymentService", "Charge");
+    assert_eq!(grpc.build_grpc_path(), "/payment.PaymentService/Charge");
+    let framed = GrpcEngine::format_grpc_payload(b"proto_data");
+    assert_eq!(framed[0], 0);
+    assert_eq!(framed.len(), 15);
+
+    let json_rpc = JsonRpcEngine::new("eth_blockNumber", vec![], 1);
+    let json_body = json_rpc.format_request_body().unwrap();
+    assert!(json_body.contains("2.0"));
+    assert!(json_body.contains("eth_blockNumber"));
+
+    let xml_rpc = XmlRpcEngine::new("system.listMethods");
+    let xml_body = xml_rpc.format_xml_payload(&["all"]);
+    assert!(xml_body.contains("system.listMethods"));
+    assert!(xml_body.contains("<string>all</string>"));
+}
+
+#[test]
+fn test_zstd_dict_and_ebpf_xdp() {
+    let samples = vec![b"JSON payload entry sample 1".to_vec(), b"JSON payload entry sample 2".to_vec()];
+    let dict = ZstdDictEngine::train_dictionary_from_samples(&samples, 32).unwrap();
+    assert_eq!(dict.len(), 32);
+
+    let mut zstd_engine = ZstdDictEngine::new(std::path::PathBuf::from("/tmp/dict.dict"));
+    zstd_engine.dict_bytes = dict;
+
+    let payload = b"Test Payload Data String";
+    let compressed = zstd_engine.compress_with_dict(payload);
+    let decompressed = zstd_engine.decompress_with_dict(&compressed);
+    assert_eq!(decompressed, payload);
+
+    let mut xdp = EbpfXdpEngine::new("eth0");
+    let _ = xdp.attach_xdp_hook();
+    let ring_cfg = xdp.format_xdp_ring_buffer_config();
+    assert!(ring_cfg.contains("eth0"));
+}
+
+#[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
     let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--gdrive-upload", "--resumable", "--max-days=7", "--max-downloads=5", "--encrypt-password=secret", "--ultraheavy", "--transfer-server", "--adler-md5"];
-    let cli = Cli::try_parse_from(args).unwrap();
+    let cli = Box::new(Cli::try_parse_from(args).unwrap());
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
     assert_eq!(cli.accept, Some("pdf,png".to_string()));
@@ -78,11 +184,11 @@ fn test_cli_parsing_wget_and_rsync_flags() {
 #[test]
 fn test_ultraheavy_master_engine_flag() {
     let args = vec!["rcurl", "https://httpbin.org/get", "--ultraheavy"];
-    let cli = Cli::try_parse_from(args).unwrap();
+    let cli = Box::new(Cli::try_parse_from(args).unwrap());
     assert!(cli.ultraheavy);
 
     let args_no = vec!["rcurl", "https://httpbin.org/get", "--no-ultraheavy"];
-    let cli_no = Cli::try_parse_from(args_no).unwrap();
+    let cli_no = Box::new(Cli::try_parse_from(args_no).unwrap());
     assert!(cli_no.no_ultraheavy);
 }
 
@@ -105,7 +211,7 @@ fn test_transfersh_engine_and_encryption() {
     let decrypted = TransferShEngine::decrypt_payload(&encrypted, key);
     assert_eq!(decrypted, data);
 
-    let temp_storage = std::env::temp_dir().join("tsh_test_storage_v9");
+    let temp_storage = std::env::temp_dir().join("tsh_test_storage_v10");
     let storage = LocalStorage::new(temp_storage.clone());
     let mut daemon = TransferShServerDaemon::new(9090, Box::new(storage));
     assert_eq!(daemon.listen_address(), "0.0.0.0:9090");
@@ -480,7 +586,7 @@ async fn test_pure_rust_file_download() {
     let out_file = std::env::temp_dir().join("rcurl_test_out.txt");
 
     let args = vec!["rcurl", &file_url, "-o", out_file.to_str().unwrap()];
-    let cli = Cli::try_parse_from(args).unwrap();
+    let cli = Box::new(Cli::try_parse_from(args).unwrap());
     let downloader = rcurl::downloader::CurlEngine::new(&cli).unwrap();
 
     downloader.execute_request(&file_url, &cli).await.unwrap();
