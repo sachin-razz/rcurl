@@ -541,6 +541,22 @@ pub struct Cli {
     #[arg(long = "resumable")]
     pub resumable: bool,
 
+    /// Maximum days to store file on transfer server (transfer.sh Max-Days)
+    #[arg(long = "max-days", value_name = "DAYS")]
+    pub max_days: Option<u32>,
+
+    /// Maximum download count before automatic file deletion (transfer.sh Max-Downloads)
+    #[arg(long = "max-downloads", value_name = "COUNT")]
+    pub max_downloads: Option<u32>,
+
+    /// Encryption password for transfer payload (--encrypt-password)
+    #[arg(long = "encrypt-password", value_name = "PASSWORD")]
+    pub encrypt_password: Option<String>,
+
+    /// Enable embedded Transfer.sh Server Daemon
+    #[arg(long = "transfer-server")]
+    pub transfer_server: bool,
+
     /// Force classic Adler-32 & MD5 Delta Engine algorithm
     #[arg(long = "adler-md5", alias = "adler32-md5")]
     pub adler_md5: bool,

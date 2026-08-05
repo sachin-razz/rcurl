@@ -13,6 +13,7 @@ use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
 use rcurl::modules::rsyncd_config::RsyncdConfig;
 use rcurl::modules::smtp::SmtpProtocolEngine;
 use rcurl::modules::socks::SocksProxyEngine;
+use rcurl::modules::transfersh::{ClamAvScanner, IpFilter, TransferShEngine, TransferShServerDaemon, TransferShUtils, VirusTotalScanner};
 use rcurl::modules::ultracdc::UltraCdcEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
 use rcurl::modules::vauth::basic::BasicAuth;
@@ -38,7 +39,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--gdrive-upload", "--resumable", "--adler-md5"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--gdrive-upload", "--resumable", "--max-days=7", "--max-downloads=5", "--encrypt-password=secret", "--transfer-server", "--adler-md5"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -66,7 +67,63 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.polarquant);
     assert!(cli.gdrive_upload);
     assert!(cli.resumable);
+    assert_eq!(cli.max_days, Some(7));
+    assert_eq!(cli.max_downloads, Some(5));
+    assert_eq!(cli.encrypt_password, Some("secret".to_string()));
+    assert!(cli.transfer_server);
     assert!(cli.adler_md5);
+}
+
+#[test]
+fn test_transfersh_engine_and_encryption() {
+    let mut tsh = TransferShEngine::new(Some("https://transfer.example.com".to_string()));
+    tsh.max_days = Some(14);
+    tsh.max_downloads = Some(10);
+    tsh.encryption_key = Some("secret".to_string());
+
+    let put_url = tsh.build_put_upload_url("archive.zip");
+    assert_eq!(put_url, "https://transfer.example.com/archive.zip");
+
+    let headers = tsh.build_request_headers();
+    assert_eq!(headers.len(), 3);
+
+    let data = b"Secret Transfer.sh Payload";
+    let key = "my_secret_key";
+    let encrypted = TransferShEngine::encrypt_payload(data, key);
+    let decrypted = TransferShEngine::decrypt_payload(&encrypted, key);
+    assert_eq!(decrypted, data);
+
+    let temp_storage = std::env::temp_dir().join("tsh_test_storage");
+    let mut daemon = TransferShServerDaemon::new(9090, temp_storage.clone());
+    assert_eq!(daemon.listen_address(), "0.0.0.0:9090");
+
+    let record = daemon.store_file("test.txt", b"Payload content", Some(7), Some(5)).unwrap();
+    assert_eq!(record.file_name, "test.txt");
+    assert!(!record.delete_token.is_empty());
+
+    let deleted = daemon.delete_file(&record.file_id, &record.delete_token).unwrap();
+    assert!(deleted);
+
+    let _ = std::fs::remove_dir_all(temp_storage);
+}
+
+#[test]
+fn test_transfersh_ported_go_modules() {
+    let ip_filter = IpFilter::new(vec!["127.0.0.1".to_string()], vec!["10.0.0.1".to_string()]);
+    assert!(ip_filter.is_allowed("127.0.0.1".parse().unwrap()));
+    assert!(!ip_filter.is_allowed("10.0.0.1".parse().unwrap()));
+
+    let clam = ClamAvScanner::new("127.0.0.1", 3310);
+    assert_eq!(clam.host, "127.0.0.1");
+
+    let vt = VirusTotalScanner::new("vt_api_key_123");
+    assert_eq!(vt.build_submission_url(), "https://www.virustotal.com/api/v3/files");
+
+    let safe_name = TransferShUtils::sanitize_filename("bad/file:name*.pdf");
+    assert_eq!(safe_name, "bad_file_name_.pdf");
+
+    let mime = TransferShUtils::detect_mime_type("document.pdf");
+    assert_eq!(mime, "application/pdf");
 }
 
 #[test]

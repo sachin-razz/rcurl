@@ -23,6 +23,7 @@ pub mod smtp;
 pub mod socks;
 pub mod telnet;
 pub mod tftp;
+pub mod transfersh;
 pub mod ultracdc;
 pub mod vauth;
 pub mod vdns;

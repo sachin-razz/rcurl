@@ -1,4 +1,4 @@
-//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC, TurboQuant, MCTS Router, SubQ, PolarQuant, WebDrive).
+//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC, TurboQuant, MCTS Router, SubQ, PolarQuant, WebDrive, Transfer.sh).
 //!
 //! # Example Doc-Tests
 //! ```rust
@@ -71,6 +71,16 @@
 //! let engine = WebDriveEngine::default();
 //! let anon_url = engine.build_anonymous_upload_endpoint("transfer", "data.zip").unwrap();
 //! assert_eq!(anon_url, "https://transfer.sh/data.zip");
+//! ```
+//!
+//! ```rust
+//! use rcurl::modules::transfersh::{TransferShEngine, TransferShServerDaemon};
+//! let tsh = TransferShEngine::default();
+//! let put_url = tsh.build_put_upload_url("hello.txt");
+//! assert_eq!(put_url, "https://transfer.sh/hello.txt");
+//!
+//! let daemon = TransferShServerDaemon::default();
+//! assert_eq!(daemon.listen_address(), "0.0.0.0:8080");
 //! ```
 
 pub mod cli;
