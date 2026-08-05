@@ -1,0 +1,312 @@
+#compdef rcurl
+
+autoload -U is-at-least
+
+_rcurl() {
+    typeset -A opt_args
+    typeset -a _arguments_options
+    local ret=1
+
+    if is-at-least 5.2; then
+        _arguments_options=(-s -S -C)
+    else
+        _arguments_options=(-s -C)
+    fi
+
+    local context curcontext="$curcontext" state line
+    _arguments "${_arguments_options[@]}" : \
+'--input-file=[Read URLs from a local input text file (Wget --input-file)]:FILE:_files' \
+'--execute=[Execute command as if part of .wgetrc (Wget --execute)]:COMMAND:_default' \
+'-g+[Log messages to logfile (Wget -o / --output-file)]:LOGFILE:_files' \
+'--output-file=[Log messages to logfile (Wget -o / --output-file)]:LOGFILE:_files' \
+'-a+[Append messages to logfile (Wget -a / --append-output)]:LOGFILE:_files' \
+'--append-output=[Append messages to logfile (Wget -a / --append-output)]:LOGFILE:_files' \
+'--base=[Resolve relative links using URL as base (Wget -B / --base)]:URL:_default' \
+'--bind-address=[Bind to local TCP/IP address (Wget --bind-address)]:ADDRESS:_default' \
+'--tries=[Set number of retries (Wget -t / --tries)]:NUMBER:_default' \
+'--progress=[Select progress indicator type (dot or bar) (Wget --progress)]:TYPE:_default' \
+'--wget-timeout=[Network timeout in seconds (Wget --timeout)]:SECONDS:_default' \
+'--dns-timeout=[DNS lookup timeout in seconds (Wget --dns-timeout)]:SECONDS:_default' \
+'--read-timeout=[Read timeout in seconds (Wget --read-timeout)]:SECONDS:_default' \
+'--wait=[Wait N seconds between retrievals (Wget -w / --wait)]:SECONDS:_default' \
+'--waitretry=[Wait N seconds between retries (Wget --waitretry)]:SECONDS:_default' \
+'--quota=[Download quota limit (Wget -Q / --quota)]:QUOTA:_default' \
+'--restrict-file-names=[Restrict URL file name modes (unix, windows, ascii) (Wget --restrict-file-names)]:MODES:_default' \
+'--prefer-family=[Preferred IP family (IPv4, IPv6, none) (Wget --prefer-family)]:FAMILY:_default' \
+'--user-name=[Username for FTP/HTTP (Wget --user)]:USER:_default' \
+'--password=[Password for FTP/HTTP (Wget --password)]:PASS:_default' \
+'--local-encoding=[Local locale encoding (Wget --local-encoding)]:ENC:_default' \
+'--remote-encoding=[Remote server encoding (Wget --remote-encoding)]:ENC:_default' \
+'--cut-dirs=[Ignore N remote directory components (Wget --cut-dirs)]:NUMBER:_default' \
+'-P+[Set output directory prefix (Wget -P / --directory-prefix)]:DIR:_files' \
+'--directory-prefix=[Set output directory prefix (Wget -P / --directory-prefix)]:DIR:_files' \
+'--http-user=[HTTP username (Wget --http-user)]:USER:_default' \
+'--http-passwd=[HTTP password (Wget --http-passwd)]:PASS:_default' \
+'--load-cookies=[Load Netscape cookies file (Wget --load-cookies)]:FILE:_files' \
+'--save-cookies=[Save cookies file before exit (Wget --save-cookies)]:FILE:_files' \
+'--max-redirect=[Max redirections (Wget --max-redirect)]:NUMBER:_default' \
+'--proxy-user-wget=[Proxy username (Wget --proxy-user)]:USER:_default' \
+'--proxy-password=[Proxy password (Wget --proxy-password)]:PASS:_default' \
+'--post-data=[Send POST data string (Wget --post-data)]:STRING:_default' \
+'--post-file=[Send POST payload from file (Wget --post-file)]:FILE:_files' \
+'--secure-protocol=[Choose SSL/TLS protocol (auto, SSLv2, SSLv3, TLSv1) (Wget --secure-protocol)]:PROTO:_default' \
+'--certificate=[Client certificate file (Wget --certificate)]:FILE:_files' \
+'--certificate-type=[Certificate type (PEM, DER) (Wget --certificate-type)]:TYPE:_default' \
+'--private-key=[Private key file (Wget --private-key)]:FILE:_files' \
+'--private-key-type=[Private key type (PEM, DER) (Wget --private-key-type)]:TYPE:_default' \
+'--ca-certificate=[Bundle CA certificate (Wget --ca-certificate)]:FILE:_files' \
+'--ca-directory=[Directory of CA certificates (Wget --ca-directory)]:DIR:_files' \
+'-l+[Maximum recursion depth level for web crawling (Wget -l / --level)]:NUMBER:_default' \
+'--level=[Maximum recursion depth level for web crawling (Wget -l / --level)]:NUMBER:_default' \
+'--accept=[Comma-separated list of accepted file extensions (Wget --accept)]:LIST:_default' \
+'-R+[Comma-separated list of rejected file extensions (Wget -R / --reject)]:LIST:_default' \
+'--reject=[Comma-separated list of rejected file extensions (Wget -R / --reject)]:LIST:_default' \
+'-D+[Comma-separated list of accepted domains (Wget -D / --domains)]:LIST:_default' \
+'--domains=[Comma-separated list of accepted domains (Wget -D / --domains)]:LIST:_default' \
+'--exclude-domains=[Comma-separated list of excluded domains (Wget --exclude-domains)]:LIST:_default' \
+'--follow-tags=[Follow HTML tags list (Wget --follow-tags)]:LIST:_default' \
+'--ignore-tags=[Ignore HTML tags list (Wget --ignore-tags)]:LIST:_default' \
+'--bwlimit=[Rsync Bandwidth limit in KB/s (Rsync --bwlimit)]:KBPS:_default' \
+'--backup-dir=[Backup directory for destination files (Rsync --backup-dir)]:DIR:_default' \
+'--suffix=[Backup file suffix (Rsync --suffix)]:SUFFIX:_default' \
+'--partial-dir=[Directory for partially transferred files (Rsync --partial-dir)]:DIR:_default' \
+'--chmod=[Custom permissions chmod mode (Rsync --chmod)]:MODE:_default' \
+'--chown=[Force ownership user\:group mapping (Rsync --chown)]:USER:GROUP:_default' \
+'--type=[Rsync SSL helper connection type\: openssl, stunnel, gnutls (Rsync-ssl --type)]:SSL_TYPE:_default' \
+'--rsyncd-config=[Path to rsyncd.conf daemon configuration file (Rsync --rsyncd-config)]:FILE:_default' \
+'*--dparam=[Override global daemon config parameter (Rsync -M / --dparam)]:PARAM=VALUE:_default' \
+'--rrsync-dir=[Restricted root directory path for rrsync (rrsync DIR)]:DIR:_default' \
+'--max-days=[Maximum days to store file on transfer server (transfer.sh Max-Days)]:DAYS:_default' \
+'--max-downloads=[Maximum download count before automatic file deletion (transfer.sh Max-Downloads)]:COUNT:_default' \
+'--encrypt-password=[Encryption password for transfer payload (--encrypt-password)]:PASSWORD:_default' \
+'--send=[Send file to peer over P2P mesh]:FILE:_default' \
+'--receive=[Receive file from peer using pairing PIN code]:PIN:_default' \
+'--json-rpc=[Transmit JSON-RPC 2.0 payload]:METHOD:_default' \
+'--xml-rpc=[Transmit XML-RPC payload]:METHOD:_default' \
+'--zstd-dict=[Load pre-trained Zstandard Shared Dictionary file]:PATH:_default' \
+'--train-dict=[Train 32 KB Zstandard Shared Dictionary on sample payload directory]:SAMPLE_DIR:_default' \
+'--multicast-send=[Broadcast file via Omni-Multicast stream]:ADDR:PORT:_default' \
+'--multicast-listen=[Listen and receive Omni-Multicast broadcast stream]:ADDR:PORT:_default' \
+'--include-directories=[Comma-separated list of included directories (Wget -I / --include-directories)]:LIST:_default' \
+'--exclude-directories=[Comma-separated list of excluded directories (Wget --exclude-directories)]:LIST:_default' \
+'-o+[Write response output to target file instead of stdout]:FILE:_files' \
+'--output=[Write response output to target file instead of stdout]:FILE:_files' \
+'--output-dir=[Directory to save output files]:DIR:_files' \
+'-X+[Custom HTTP request method (GET, POST, PUT, DELETE, PATCH, HEAD)]:METHOD:_default' \
+'--request=[Custom HTTP request method (GET, POST, PUT, DELETE, PATCH, HEAD)]:METHOD:_default' \
+'*-H+[Pass custom header(s) to server (e.g. -H "Content-Type\: application/json")]:HEADER:_default' \
+'*--header=[Pass custom header(s) to server (e.g. -H "Content-Type\: application/json")]:HEADER:_default' \
+'*--proxy-header=[Pass custom header to proxy]:HEADER:_default' \
+'-d+[HTTP POST / PUT data payload]:DATA:_default' \
+'--data=[HTTP POST / PUT data payload]:DATA:_default' \
+'--data-raw=[HTTP POST raw data payload]:DATA:_default' \
+'--data-binary=[HTTP POST binary data payload]:DATA:_default' \
+'--data-urlencode=[HTTP POST URL-encoded data payload]:DATA:_default' \
+'--json=[Send JSON payload and automatically set Content-Type & Accept to application/json]:JSON:_default' \
+'*-F+[Send multipart/form-data form fields (e.g. -F "file=@photo.jpg")]:KEY=VALUE:_default' \
+'*--form=[Send multipart/form-data form fields (e.g. -F "file=@photo.jpg")]:KEY=VALUE:_default' \
+'*--form-string=[Send multipart/form-data string field]:KEY=VALUE:_default' \
+'-T+[Transfer local file to remote server via PUT (-T file.tar.gz)]:FILE:_files' \
+'--upload-file=[Transfer local file to remote server via PUT (-T file.tar.gz)]:FILE:_files' \
+'--cacert=[Specify CA certificate file to verify peer]:FILE:_files' \
+'-E+[Specify client certificate file]:FILE:_files' \
+'--cert=[Specify client certificate file]:FILE:_files' \
+'--key=[Specify private key file]:FILE:_files' \
+'--pass=[Certificate key passphrase]:PASSPHRASE:_default' \
+'--dump-header=[Dump raw response headers to a separate file]:FILE:_files' \
+'--max-redirs=[Maximum number of redirects to follow (default\: 50)]:NUM:_default' \
+'--connect-timeout=[Maximum time allowed for connection phase in seconds]:SECONDS:_default' \
+'-t+[Number of parallel worker threads / range chunk streams (default\: 16)]:NUM:_default' \
+'--threads=[Number of parallel worker threads / range chunk streams (default\: 16)]:NUM:_default' \
+'--parallel-max=[Maximum parallel transfers]:PARALLEL_MAX:_default' \
+'-C+[Resume transfer from byte offset or automatically detect existing file size ("auto")]:OFFSET:_default' \
+'--continue-at=[Resume transfer from byte offset or automatically detect existing file size ("auto")]:OFFSET:_default' \
+'-r+[Request byte range (e.g. -r 0-1024)]:RANGE:_default' \
+'--range=[Request byte range (e.g. -r 0-1024)]:RANGE:_default' \
+'-A+[Specify User-Agent header string]:STRING:_default' \
+'--user-agent=[Specify User-Agent header string]:STRING:_default' \
+'-e+[Specify HTTP Referer header]:URL:_default' \
+'--referer=[Specify HTTP Referer header]:URL:_default' \
+'-b+[Pass HTTP Cookie string (e.g. -b "name=val")]:STRING/FILE:_default' \
+'--cookie=[Pass HTTP Cookie string (e.g. -b "name=val")]:STRING/FILE:_default' \
+'-c+[Save HTTP cookies to cookie jar file]:FILE:_files' \
+'--cookie-jar=[Save HTTP cookies to cookie jar file]:FILE:_files' \
+'-u+[Set HTTP Basic authentication username\:password]:USER:PASSWORD:_default' \
+'--user=[Set HTTP Basic authentication username\:password]:USER:PASSWORD:_default' \
+'-U+[Set proxy authentication username\:password]:USER:PASSWORD:_default' \
+'--proxy-user=[Set proxy authentication username\:password]:USER:PASSWORD:_default' \
+'-m+[Maximum request timeout in seconds]:SECONDS:_default' \
+'--max-time=[Maximum request timeout in seconds]:SECONDS:_default' \
+'--retry=[Maximum number of automatic retries on connection failure]:NUM:_default' \
+'--rate-limit=[Restrict maximum download speed (e.g. --rate-limit 5M, 500K)]:SPEED:_default' \
+'--limit-rate=[Restrict maximum download speed (curl standard flag)]:SPEED:_default' \
+'--sha256=[Expected SHA-256 hash to verify file integrity after streaming download]:HASH:_default' \
+'--md5=[Expected MD5 hash to verify file integrity after streaming download]:HASH:_default' \
+'-x+[Route requests through HTTP, HTTPS, or SOCKS5 proxy (e.g. -x socks5\://127.0.0.1\:9050)]:URL:_default' \
+'--proxy=[Route requests through HTTP, HTTPS, or SOCKS5 proxy (e.g. -x socks5\://127.0.0.1\:9050)]:URL:_default' \
+'--socks5=[SOCKS5 proxy server]:HOST:PORT:_default' \
+'--socks5-hostname=[SOCKS5 hostname proxy server]:HOST:PORT:_default' \
+'--doh-url=[DNS Over HTTPS (DoH) URL]:URL:_default' \
+'*--resolve=[Custom host resolution mapping (--resolve host\:port\:address)]:HOST:PORT:ADDR:_default' \
+'-K+[Custom path for .rcurlrc configuration file]:PATH:_files' \
+'--config=[Custom path for .rcurlrc configuration file]:PATH:_files' \
+'--netrc-file=[Netrc file path]:FILE:_files' \
+'-w+[Periodically poll/watch URL every N seconds (e.g. -w 2s, -w 500ms)]:INTERVAL:_default' \
+'--watch=[Periodically poll/watch URL every N seconds (e.g. -w 2s, -w 500ms)]:INTERVAL:_default' \
+'--watch-file=[Automatically re-send request whenever specified file changes on disk]:FILE:_files' \
+'--write-out=[Output format string (curl -w / --write-out)]:FORMAT:_default' \
+'--background[Run in background immediately (Wget --background)]' \
+'--debug[Turn on debug output (Wget -d / --debug)]' \
+'-q[Turn off output / quiet mode (Wget -q / --quiet)]' \
+'--quiet[Turn off output / quiet mode (Wget -q / --quiet)]' \
+'--no-verbose[Non-verbose output (Wget -nv / --no-verbose)]' \
+'--force-html[Force input file to be treated as HTML (Wget -F / --force-html)]' \
+'--no-clobber[Prevent clobbering existing files (Wget -nc / --no-clobber)]' \
+'--continue[Continue getting partially-downloaded file (Wget -c / --continue)]' \
+'--no-use-server-timestamps[Don'\''t set local file timestamp from server (Wget --no-use-server-timestamps)]' \
+'--server-response[Print headers sent by HTTP/FTP servers (Wget -S / --server-response)]' \
+'--spider[Web spider mode\: check pages without downloading (Wget --spider)]' \
+'--random-wait[Randomize wait times between requests (Wget --random-wait)]' \
+'--no-proxy[Don'\''t use proxies (Wget --no-proxy)]' \
+'--no-dns-cache[Turn off DNS caching (Wget --no-dns-cache)]' \
+'-4[Force IPv4 only (Wget -4 / --inet4-only)]' \
+'--inet4-only[Force IPv4 only (Wget -4 / --inet4-only)]' \
+'-6[Force IPv6 only (Wget -6 / --inet6-only)]' \
+'--inet6-only[Force IPv6 only (Wget -6 / --inet6-only)]' \
+'--retry-connrefused[Retry transient connection refused errors (Wget --retry-connrefused)]' \
+'--ask-password[Prompt for password (Wget --ask-password)]' \
+'--no-iri[Turn off IRI support (Wget --no-iri)]' \
+'--unlink[Force unlink existing file before writing (Wget --unlink)]' \
+'--no-directories[Disable directory creation hierarchy (Wget -nd / --no-directories)]' \
+'--force-directories[Force local directory hierarchy creation (Wget -x / --force-directories)]' \
+'--no-host-directories[Disable host-prefixed directory (Wget -nH / --no-host-directories)]' \
+'--protocol-directories[Use protocol names as directory components (Wget --protocol-directories)]' \
+'--html-extension[Append .html extension to HTML responses (Wget -E / --html-extension)]' \
+'--no-cache[Disable server-side caching (Wget --no-cache)]' \
+'--no-cookies[Disable cookies (Wget --no-cookies)]' \
+'--keep-session-cookies[Save session cookies (Wget --keep-session-cookies)]' \
+'--ignore-length[Ignore Content-Length header (Wget --ignore-length)]' \
+'--save-headers[Save response headers to output file (Wget --save-headers)]' \
+'--content-disposition[Respect Content-Disposition header filename (Wget --content-disposition)]' \
+'--trust-server-names[Use redirection URL last component as filename (Wget --trust-server-names)]' \
+'--auth-no-challenge[Send Basic Auth without server challenge (Wget --auth-no-challenge)]' \
+'--no-check-certificate[Skip SSL certificate verification (Wget --no-check-certificate)]' \
+'--recursive[Enable recursive web crawling & downloading (Wget --recursive)]' \
+'--delete-after[Delete downloaded files after retrieval (Wget --delete-after)]' \
+'--convert-links[Convert links for local offline viewing (Wget -k / --convert-links)]' \
+'--backup-converted[Backup original files with .orig suffix before converting (Wget -K / --backup-converted)]' \
+'--mirror[Mirror website recursively with timestamping (Wget --mirror)]' \
+'-p[Download all page requisites (CSS, JS, images) for offline viewing (Wget -p)]' \
+'--page-requisites[Download all page requisites (CSS, JS, images) for offline viewing (Wget -p)]' \
+'--strict-comments[Strict SGML HTML comment parsing (Wget --strict-comments)]' \
+'--follow-ftp[Follow FTP links from HTML pages (Wget --follow-ftp)]' \
+'--ignore-case[Ignore case when matching files (Wget --ignore-case)]' \
+'--archive[Rsync Archive mode (preserve permissions, times, symlinks) (Rsync --archive)]' \
+'-z[Rsync Compress file data during transfer (Rsync -z / --compress)]' \
+'--compress[Rsync Compress file data during transfer (Rsync -z / --compress)]' \
+'--delete[Rsync Delete extraneous files from destination dir (Rsync --delete)]' \
+'--dry-run[Perform trial run without making changes (Rsync --dry-run)]' \
+'--whole-file[Copy files whole without delta transfer (Rsync --whole-file)]' \
+'--inplace[Update destination files in-place (Rsync --inplace)]' \
+'--backup[Make backup copies of destination files (Rsync --backup)]' \
+'--checksum[Force checksum comparison before transfer (Rsync --checksum)]' \
+'--itemize-changes[Itemize change summary for all updates (Rsync --itemize-changes)]' \
+'--stats[Output verbose transfer statistics (Rsync --stats)]' \
+'--delay-updates[Put updated files into place at end (Rsync --delay-updates)]' \
+'--partial[Keep partially transferred files (Rsync --partial)]' \
+'--prune-empty-dirs[Prune empty directory chains from file list (Rsync --prune-empty-dirs)]' \
+'--remove-source-files[Sender removes synchronized files (Rsync --remove-source-files)]' \
+'--numeric-ids[Transfer numeric UID/GID values (Rsync --numeric-ids)]' \
+'--list-only[List files instead of transferring (Rsync --list-only)]' \
+'--mkpath[Create missing path components of destination (Rsync --mkpath)]' \
+'--rsync-ssl[Enable SSL/TLS encryption for Rsync daemon transfer (Rsync-ssl)]' \
+'--daemon[Run as an rsync daemon (Rsync --daemon)]' \
+'--no-detach[Do not detach from the parent process (Rsync --no-detach)]' \
+'--rrsync[Enable restricted rsync SSH mode (rrsync)]' \
+'--rrsync-ro[Allow only reading from restricted DIR (rrsync -ro)]' \
+'--rrsync-wo[Allow only writing to restricted DIR (rrsync -wo)]' \
+'--rrsync-munge[Enable symlink munging on server side (rrsync -munge)]' \
+'--rrsync-no-del[Disable delete and remove options in rrsync (rrsync -no-del)]' \
+'--rrsync-no-overwrite[Prevent overwriting existing files in rrsync (rrsync -no-overwrite)]' \
+'--path-containment[Enforce strict path traversal containment check within target directory]' \
+'--fastcdc[Enable FastCDC Content-Defined Variable Chunking Engine (Next-Gen Delta Sync)]' \
+'--ultracdc[Enable UltraCDC Normalized Dual-Mask & Merkle-DAG Tree Sync Engine]' \
+'--turboquant[Enable TurboQuant Vector Quantization Chunk Compression Engine]' \
+'--mcts-router[Enable MCTS (Monte Carlo Tree Search) Intelligent Multi-Path Chunk Router]' \
+'--subq[Enable SubQ (Sub-Vector Quantization) Delta Compression Engine]' \
+'--polarquant[Enable PolarQuant (Polar Coordinate Angle-Magnitude Quantization) Engine]' \
+'--gdrive-upload[Enable Google Drive Resumable API-keyless upload engine]' \
+'--resumable[Force Resumable Chunked Upload Protocol]' \
+'--ultraheavy[Combine all Next-Gen CDC & AI Compression Engines (UltraCDC + TurboQuant + MCTS + SubQ + PolarQuant)]' \
+'--no-ultraheavy[Disable Ultraheavy engine and force standard 16-thread HTTP Range streaming]' \
+'--torrent[Force BitTorrent P2P & Magnet Client Engine]' \
+'--no-share[Enable Private Leech Mode (Set upload rate to 0 and choke peers on 100% completion)]' \
+'--p2p-mesh[Enable Universal Open Device-to-Device Mesh Transfer Engine]' \
+'--tailscale-mesh[Enable Tailscale & WireGuard private mesh VPN compatibility]' \
+'--grpc[Force gRPC / gRPC-Web binary Protobuf streaming engine]' \
+'--ebpf-accelerator[Enable Kernel eBPF XDP Socket Acceleration (Linux zero-copy socket bypass)]' \
+'--tui[Launch Interactive Terminal TUI Dashboard]' \
+'--tor[Force Tor SOCKS5 Onion circuit routing for .onion URLs]' \
+'--i2p[Force I2P SAM v3 bridge routing for .i2p URLs]' \
+'--omni-multicast[Enable Omni-Multicast dual-stack IPv4/IPv6 SSM & PGM FEC repair engine]' \
+'--mitm-proxy[Launch TLS MITM Proxy Interceptor & Traffic Inspector Daemon]' \
+'--micro-ram[Force Sub-Megabyte (< 1 MB) Micro-RAM Engine Mode]' \
+'--transfer-server[Enable embedded Transfer.sh Server Daemon]' \
+'--adler-md5[Force classic Adler-32 & MD5 Delta Engine algorithm]' \
+'--span-hosts[Span across hosts during recursive download (Wget -H / --span-hosts)]' \
+'--relative[Follow relative links only (Wget --relative)]' \
+'--no-parent[Do not ascend to parent directory (Wget -np / --no-parent)]' \
+'-O[Write output to a file named after the remote file name]' \
+'--remote-name[Write output to a file named after the remote file name]' \
+'--remote-name-all[Write all remote files to remote names in multi-URL mode]' \
+'--compressed[Request compressed response (gzip, brotli, deflate, zstd)]' \
+'-k[Allow insecure SSL/TLS connections (skip certificate verification)]' \
+'--insecure[Allow insecure SSL/TLS connections (skip certificate verification)]' \
+'-N[Disable stdout buffering for real-time streaming data]' \
+'--no-buffer[Disable stdout buffering for real-time streaming data]' \
+'-L[Follow HTTP redirects]' \
+'--location[Follow HTTP redirects]' \
+'--location-trusted[Follow redirects with trusted credentials across hosts]' \
+'-v[Verbose output (show request and response headers)]' \
+'--verbose[Verbose output (show request and response headers)]' \
+'-i[Include HTTP response headers in the output stream]' \
+'--include[Include HTTP response headers in the output stream]' \
+'-I[Fetch HTTP headers only (HEAD request)]' \
+'--head[Fetch HTTP headers only (HEAD request)]' \
+'-s[Silent mode (suppress progress bar and status messages)]' \
+'--silent[Silent mode (suppress progress bar and status messages)]' \
+'-S[Show error message even when silent]' \
+'--show-error[Show error message even when silent]' \
+'-f[Fail fast on HTTP errors (4xx / 5xx)]' \
+'--fail[Fail fast on HTTP errors (4xx / 5xx)]' \
+'-Z[Parallel multi-URL transfer mode]' \
+'--parallel[Parallel multi-URL transfer mode]' \
+'--json-output[Output telemetry metrics and transfer results in JSON format]' \
+'--json-metrics[Legacy / shortcut json flag]' \
+'-0[Force HTTP/1.0 protocol]' \
+'--http1.0[Force HTTP/1.0 protocol]' \
+'--http1.1[Force HTTP/1.1 protocol]' \
+'--http2[Prioritize HTTP/2 multiplexing protocol]' \
+'--http2-prior-knowledge[Force HTTP/2 prior knowledge]' \
+'--http3[Prioritize HTTP/3 QUIC transport]' \
+'-n[Read credentials from ~/.netrc file]' \
+'--netrc[Read credentials from ~/.netrc file]' \
+'-h[Print help]' \
+'--help[Print help]' \
+'-V[Print version]' \
+'--version[Print version]' \
+'*::urls -- URL(s) to fetch / download:_default' \
+&& ret=0
+}
+
+(( $+functions[_rcurl_commands] )) ||
+_rcurl_commands() {
+    local commands; commands=()
+    _describe -t commands 'rcurl commands' commands "$@"
+}
+
+if [ "$funcstack[1]" = "_rcurl" ]; then
+    _rcurl "$@"
+else
+    compdef _rcurl rcurl
+fi
