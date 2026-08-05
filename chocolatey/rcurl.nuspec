@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>rcurl</id>
+    <version>11.6.0</version>
+    <packageSourceUrl>https://github.com/sachin-razz/rcurl</packageSourceUrl>
+    <owners>Sachin Rajpurohit</owners>
+    <title>rcurl CLI</title>
+    <authors>Sachin Rajpurohit</authors>
+    <projectUrl>https://github.com/sachin-razz/rcurl</projectUrl>
+    <licenseUrl>https://github.com/sachin-razz/rcurl/blob/master/LICENSE</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <tags>rcurl curl downloader p2p streaming tokio rust</tags>
+    <summary>16-Thread Tokio Streaming CLI Downloader</summary>
+    <description>Ultra-fast 16-thread streaming CLI downloader with BitTorrent P2P, WebDrive, gRPC, Zstd Dict, eBPF XDP, and TUI Dashboard.</description>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

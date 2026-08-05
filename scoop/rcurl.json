@@ -1,0 +1,20 @@
+{
+  "version": "11.6.0",
+  "description": "16-Thread Tokio Streaming CLI Downloader (Pure Rust Native Engine)",
+  "homepage": "https://github.com/sachin-razz/rcurl",
+  "license": "MIT",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/sachin-razz/rcurl/releases/latest/download/rcurl-windows-x86_64.zip",
+      "bin": "rcurl.exe"
+    }
+  },
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/sachin-razz/rcurl/releases/download/v$version/rcurl-windows-x86_64.zip"
+      }
+    }
+  }
+}

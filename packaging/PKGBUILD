@@ -1,0 +1,20 @@
+# Maintainer: Sachin Rajpurohit <sachin-razz>
+pkgname=rcurl-bin
+pkgver=11.6.0
+pkgrel=1
+pkgdesc="16-Thread Tokio Streaming CLI Downloader (Pure Rust Native Engine)"
+arch=('x86_64' 'aarch64')
+url="https://github.com/sachin-razz/rcurl"
+license=('MIT')
+provides=('rcurl')
+conflicts=('rcurl')
+
+source_x86_64=("https://github.com/sachin-razz/rcurl/releases/download/v${pkgver}/rcurl-linux-x86_64.tar.gz")
+sha256sums_x86_64=('SKIP')
+
+package() {
+    install -Dm755 "${srcdir}/rcurl" "${pkgdir}/usr/bin/rcurl"
+    install -Dm644 "${srcdir}/completions/_rcurl" "${pkgdir}/usr/share/zsh/site-functions/_rcurl"
+    install -Dm644 "${srcdir}/completions/rcurl.bash" "${pkgdir}/usr/share/bash-completion/completions/rcurl"
+    install -Dm644 "${srcdir}/completions/rcurl.fish" "${pkgdir}/usr/share/fish/vendor_completions.d/rcurl.fish"
+}
