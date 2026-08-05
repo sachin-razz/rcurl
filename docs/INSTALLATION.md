@@ -9,7 +9,6 @@ This document provides complete installation instructions for `rcurl` across **a
 2. [GNU/Linux Installation Matrix](#2-gnulinux-installation-matrix)
 3. [macOS & Windows Installation Matrix](#3-macos--windows-installation-matrix)
 4. [Universal 1-Line Install Script](#4-universal-1-line-install-script)
-5. [Rust `#[allow(dead_code)]` Directive Explained](#5-rust-allowdead_code-directive-explained)
 
 ---
 
@@ -106,19 +105,3 @@ curl -sSL https://raw.githubusercontent.com/sachin-razz/rcurl/master/install.sh 
 ```
 
 This installer automatically detects your operating system and CPU architecture (x86_64, ARM64), downloads the pre-compiled binary from GitHub Releases, installs it to `/usr/local/bin/rcurl`, and configures Zsh tab completions!
-
----
-
-## 5. Rust `#[allow(dead_code)]` Directive Explained
-
-### ❓ What does `#[allow(dead_code)]` mean?
-
-In Rust, the compiler enforces strict code quality lints. By default, if a function, struct, or variable is written but not directly called in the main binary entry point, Rust emits a compiler warning: `warning: function is never used (dead_code)`.
-
-`#[allow(dead_code)]` is an explicit attribute placed above functions or module structs (like `parse_rate_limit()` or `parse_interval()`) that tells the Rust compiler:
-
-> *"This code symbol is deliberately created as part of the library API, test suite, or future CLI options. Do not emit a warning."*
-
-### 💡 Why is it useful in `rcurl`?
-1. **Public Library API**: `rcurl` is both a CLI binary and a Rust crate library (`src/lib.rs`). Functions like `parse_rate_limit()` are exported for third-party Rust applications calling `rcurl` as a dependency.
-2. **Modular Architecture**: Prevents compiler noise while maintaining helper utilities for protocols, CDC chunking, and memory engines.
