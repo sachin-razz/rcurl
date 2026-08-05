@@ -513,6 +513,10 @@ pub struct Cli {
     #[arg(long = "fastcdc")]
     pub fastcdc: bool,
 
+    /// Enable UltraCDC Normalized Dual-Mask & Merkle-DAG Tree Sync Engine
+    #[arg(long = "ultracdc")]
+    pub ultracdc: bool,
+
     /// Force classic Adler-32 & MD5 Delta Engine algorithm
     #[arg(long = "adler-md5", alias = "adler32-md5")]
     pub adler_md5: bool,

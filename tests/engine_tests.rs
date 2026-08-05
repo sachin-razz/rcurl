@@ -11,6 +11,7 @@ use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
 use rcurl::modules::rsyncd_config::RsyncdConfig;
 use rcurl::modules::smtp::SmtpProtocolEngine;
 use rcurl::modules::socks::SocksProxyEngine;
+use rcurl::modules::ultracdc::UltraCdcEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
 use rcurl::modules::vauth::basic::BasicAuth;
 use rcurl::modules::vauth::oauth2::OAuth2Auth;
@@ -34,7 +35,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--adler-md5"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--adler-md5"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -55,6 +56,7 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert_eq!(cli.rrsync_dir, Some("/tmp/backup".to_string()));
     assert!(cli.path_containment);
     assert!(cli.fastcdc);
+    assert!(cli.ultracdc);
     assert!(cli.adler_md5);
 }
 
@@ -67,6 +69,19 @@ fn test_fastcdc_variable_chunking() {
     let chunks = cdc.chunk_file(&temp_file).unwrap();
     assert!(!chunks.is_empty());
     assert!(chunks[0].length >= 16);
+
+    let _ = std::fs::remove_file(temp_file);
+}
+
+#[test]
+fn test_ultracdc_dual_mask_chunking() {
+    let temp_file = std::env::temp_dir().join("ultracdc_test_data.txt");
+    std::fs::write(&temp_file, "UltraCDC Normalized Dual Mask Merkle DAG Tree Sync Engine Test Payload").unwrap();
+
+    let ucdc = UltraCdcEngine::new(16, 32, 64);
+    let (chunks, merkle_root) = ucdc.chunk_file(&temp_file).unwrap();
+    assert!(!chunks.is_empty());
+    assert!(!merkle_root.is_empty());
 
     let _ = std::fs::remove_file(temp_file);
 }
