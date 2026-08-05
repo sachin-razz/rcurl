@@ -12,6 +12,7 @@ pub mod imap;
 pub mod mqtt;
 pub mod pop3;
 pub mod rsync;
+pub mod rsyncd_config;
 pub mod rtsp;
 pub mod smb;
 pub mod smtp;

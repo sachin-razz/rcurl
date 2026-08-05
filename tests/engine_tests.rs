@@ -5,7 +5,8 @@ use rcurl::modules::cookie::CookieStore;
 use rcurl::modules::ftp::FtpProtocolEngine;
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
-use rcurl::modules::rsync::{RsyncEngine, RsyncSslEngine};
+use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
+use rcurl::modules::rsyncd_config::RsyncdConfig;
 use rcurl::modules::smtp::SmtpProtocolEngine;
 use rcurl::modules::socks::SocksProxyEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
@@ -31,7 +32,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -45,6 +46,42 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.list_only);
     assert_eq!(cli.ssl_type, Some("openssl".to_string()));
     assert!(cli.rsync_ssl);
+    assert!(cli.daemon);
+    assert_eq!(cli.config_file, Some("/etc/rsyncd.conf".to_string()));
+}
+
+#[test]
+fn test_rsyncd_config_parser_and_daemon() {
+    let conf_str = r#"
+port = 873
+address = 127.0.0.1
+syslog facility = local5
+
+[ftp]
+path = /var/ftp/pub
+comment = Sample FTP Export
+read only = true
+auth users = admin, guest
+
+[backups]
+path = /var/backups
+read only = false
+"#;
+
+    let config = RsyncdConfig::parse_str(conf_str, None).unwrap();
+    assert_eq!(config.port, 873);
+    assert_eq!(config.address, "127.0.0.1");
+    assert_eq!(config.modules.len(), 2);
+
+    let ftp_mod = config.modules.get("ftp").unwrap();
+    assert_eq!(ftp_mod.path.to_str().unwrap(), "/var/ftp/pub");
+    assert!(ftp_mod.read_only);
+    assert_eq!(ftp_mod.auth_users, vec!["admin", "guest"]);
+
+    let daemon = RsyncDaemonServer::new(config, false);
+    assert_eq!(daemon.listen_address(), "127.0.0.1:873");
+    let mod_list = daemon.list_modules();
+    assert_eq!(mod_list.len(), 2);
 }
 
 #[test]

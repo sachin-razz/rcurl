@@ -4,6 +4,7 @@ use std::env;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use crate::modules::rsyncd_config::RsyncdConfig;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -236,5 +237,47 @@ impl RsyncSslEngine {
             "{} s_client -connect {}:{} -servername {} (module: {})",
             self.ssl_type, host, self.ssl_port, host, module
         )
+    }
+}
+
+/// Rsync Daemon Server Engine (rsyncd.conf specification)
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct RsyncDaemonServer {
+    pub config: RsyncdConfig,
+    pub detach: bool,
+}
+
+#[allow(dead_code)]
+impl RsyncDaemonServer {
+    pub fn new(config: RsyncdConfig, detach: bool) -> Self {
+        Self { config, detach }
+    }
+
+    /// Start listening address & port string
+    pub fn listen_address(&self) -> String {
+        format!("{}:{}", self.config.address, self.config.port)
+    }
+
+    /// Process client connection greeting & module listing
+    pub fn handle_client_greeting(&self) -> Vec<String> {
+        let mut response = Vec::new();
+        response.push("@RSYNCD: 31.0".to_string());
+        if let Some(ref motd) = self.config.motd_file {
+            if let Ok(motd_text) = fs::read_to_string(motd) {
+                response.push(motd_text);
+            }
+        }
+        response
+    }
+
+    /// List available modules on daemon
+    pub fn list_modules(&self) -> Vec<String> {
+        let mut list = Vec::new();
+        for (name, module) in &self.config.modules {
+            let desc = module.comment.as_deref().unwrap_or("");
+            list.push(format!("{:<15}\t{}", name, desc));
+        }
+        list
     }
 }

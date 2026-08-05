@@ -461,6 +461,22 @@ pub struct Cli {
     #[arg(long = "rsync-ssl")]
     pub rsync_ssl: bool,
 
+    /// Run as an rsync daemon (Rsync --daemon)
+    #[arg(long = "daemon")]
+    pub daemon: bool,
+
+    /// Path to rsyncd.conf daemon configuration file (Rsync --rsyncd-config)
+    #[arg(long = "rsyncd-config", value_name = "FILE")]
+    pub config_file: Option<String>,
+
+    /// Do not detach from the parent process (Rsync --no-detach)
+    #[arg(long = "no-detach")]
+    pub no_detach: bool,
+
+    /// Override global daemon config parameter (Rsync -M / --dparam)
+    #[arg(long = "dparam", value_name = "PARAM=VALUE")]
+    pub dparam: Vec<String>,
+
     /// Span across hosts during recursive download (Wget -H / --span-hosts)
     #[arg(long = "span-hosts")]
     pub span_hosts: bool,
