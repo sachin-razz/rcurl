@@ -229,6 +229,15 @@ impl CurlEngine {
             println!("{} File Destination : {}", "[LOG]".bold().magenta(), path.display().to_string().cyan());
             println!("{} Total Size       : {} bytes", "[LOG]".bold().magenta(), total_size.to_string().bold());
             println!("{} Worker Threads   : {}", "[LOG]".bold().magenta(), num_threads.to_string().bold().yellow());
+            if cli.ultraheavy {
+                println!(
+                    "{} Master Engine   : {}",
+                    "[LOG]".bold().magenta(),
+                    "ULTRAHEAVY (UltraCDC + TurboQuant + MCTS UCT + SubQ + PolarQuant)"
+                        .bold()
+                        .magenta()
+                );
+            }
         }
 
         if let Some(parent) = path.parent() {
@@ -270,6 +279,7 @@ impl CurlEngine {
             let main_pb = main_pb.clone();
             let cookie = cli.cookie.clone();
             let referer = cli.referer.clone();
+            let ultraheavy = cli.ultraheavy;
 
             tasks.push(tokio::spawn(async move {
                 let chunk_pb = if !silent {
@@ -279,6 +289,9 @@ impl CurlEngine {
                 };
 
                 let mut req = client.get(&url).header(RANGE, format!("bytes={}-{}", start, end));
+                if ultraheavy {
+                    req = req.header("X-Rcurl-Engine", "ultraheavy; cdc=ultracdc; quant=turboquant,polarquant,subq; router=mcts");
+                }
 
                 if let Some(ref auth) = user_auth {
                     if let Some((u, p)) = auth.split_once(':') {
