@@ -1,6 +1,11 @@
 use rcurl::cli::Cli;
+use rcurl::modules::altsvc::AltSvcCache;
 use rcurl::modules::cookie::CookieStore;
 use rcurl::modules::hsts::HstsCache;
+use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
+use rcurl::modules::vauth::basic::BasicAuth;
+use rcurl::modules::vauth::oauth2::OAuth2Auth;
+use rcurl::modules::vdns::dns::DnsEngine;
 use rcurl::modules::vquic::quic::QuicTransportEngine;
 use clap::Parser;
 
@@ -50,6 +55,36 @@ fn test_quic_transport_engine() {
     let config_str = engine.build_quic_config();
     assert!(config_str.contains("30000ms"));
     assert!(config_str.contains("10000000 bytes"));
+}
+
+#[test]
+fn test_basic_and_oauth_auth() {
+    let basic_header = BasicAuth::build_header("admin", "secret123");
+    assert!(basic_header.starts_with("Basic "));
+
+    let bearer_header = OAuth2Auth::build_bearer_header("token123xyz");
+    assert_eq!(bearer_header, "Bearer token123xyz");
+}
+
+#[test]
+fn test_aws_sigv4_hash() {
+    let payload = b"Hello AWS SigV4";
+    let hash = AwsSigV4Auth::compute_sha256_hex(payload);
+    assert_eq!(hash.len(), 64);
+}
+
+#[test]
+fn test_alt_svc_parser() {
+    let mut cache = AltSvcCache::new();
+    cache.parse_alt_svc_header("example.com", "h3=\":443\"; ma=86400");
+    assert_eq!(cache.get_alt_svc("example.com"), Some(&":443".to_string()));
+}
+
+#[tokio::test]
+async fn test_dns_resolver() {
+    let dns = DnsEngine::new();
+    let resolved = dns.resolve("localhost", 80).await.unwrap();
+    assert!(!resolved.is_empty());
 }
 
 #[tokio::test]
