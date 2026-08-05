@@ -505,6 +505,10 @@ pub struct Cli {
     #[arg(long = "rrsync-no-overwrite")]
     pub rrsync_no_overwrite: bool,
 
+    /// Enforce strict path traversal containment check within target directory
+    #[arg(long = "path-containment", alias = "strict-path")]
+    pub path_containment: bool,
+
     /// Span across hosts during recursive download (Wget -H / --span-hosts)
     #[arg(long = "span-hosts")]
     pub span_hosts: bool,

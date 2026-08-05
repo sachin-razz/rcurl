@@ -11,6 +11,7 @@ pub struct RrsyncEngine {
     pub no_delete: bool,
     pub no_lock: bool,
     pub no_overwrite: bool,
+    pub path_containment: bool,
 }
 
 impl Default for RrsyncEngine {
@@ -23,6 +24,7 @@ impl Default for RrsyncEngine {
             no_delete: false,
             no_lock: false,
             no_overwrite: false,
+            path_containment: true,
         }
     }
 }
@@ -55,6 +57,12 @@ impl RrsyncEngine {
         self
     }
 
+    /// Enable or disable path containment check
+    pub fn with_path_containment(mut self, enabled: bool) -> Self {
+        self.path_containment = enabled;
+        self
+    }
+
     /// Validate path is strictly contained within restricted_dir
     pub fn validate_path(&self, requested_path: &Path) -> Result<PathBuf> {
         let clean_path = if requested_path.is_absolute() {
@@ -65,11 +73,17 @@ impl RrsyncEngine {
 
         let target = self.restricted_dir.join(clean_path);
 
-        // Security check: prevent path traversal attacks escaping restricted_dir
-        if let Ok(canon_restricted) = self.restricted_dir.canonicalize() {
-            if let Ok(canon_target) = target.canonicalize() {
-                if !canon_target.starts_with(&canon_restricted) {
-                    anyhow::bail!("Security Violation: Path {} escapes restricted directory {}", requested_path.display(), self.restricted_dir.display());
+        if self.path_containment {
+            // Security check: prevent path traversal attacks escaping restricted_dir
+            if let Ok(canon_restricted) = self.restricted_dir.canonicalize() {
+                if let Ok(canon_target) = target.canonicalize() {
+                    if !canon_target.starts_with(&canon_restricted) {
+                        anyhow::bail!(
+                            "Security Violation: Path {} escapes restricted directory {}",
+                            requested_path.display(),
+                            self.restricted_dir.display()
+                        );
+                    }
                 }
             }
         }

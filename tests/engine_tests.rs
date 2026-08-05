@@ -33,7 +33,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -52,14 +52,16 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.rrsync);
     assert!(cli.rrsync_ro);
     assert_eq!(cli.rrsync_dir, Some("/tmp/backup".to_string()));
+    assert!(cli.path_containment);
 }
 
 #[test]
 fn test_rrsync_restricted_engine() {
-    let engine = RrsyncEngine::new("/tmp").read_only().munge_symlinks();
+    let engine = RrsyncEngine::new("/tmp").read_only().munge_symlinks().with_path_containment(true);
     assert!(engine.read_only);
     assert!(engine.no_delete);
     assert!(engine.munge_symlinks);
+    assert!(engine.path_containment);
 
     let cmd = engine.build_server_command();
     assert!(cmd.contains(&"--sender".to_string()));
