@@ -6,6 +6,7 @@ use rcurl::modules::fastcdc::FastCdcEngine;
 use rcurl::modules::ftp::FtpProtocolEngine;
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
+use rcurl::modules::mcts_quant::{MctsChunkRouter, TurboQuantEngine};
 use rcurl::modules::rrsync::RrsyncEngine;
 use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
 use rcurl::modules::rsyncd_config::RsyncdConfig;
@@ -35,7 +36,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--adler-md5"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--adler-md5"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -57,7 +58,28 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.path_containment);
     assert!(cli.fastcdc);
     assert!(cli.ultracdc);
+    assert!(cli.turboquant);
+    assert!(cli.mcts_router);
     assert!(cli.adler_md5);
+}
+
+#[test]
+fn test_turboquant_vector_quantization() {
+    let tq = TurboQuantEngine::new(8);
+    let q = tq.quantize_bytes(b"Testing TurboQuant Vector Quantization");
+    assert_eq!(q.original_size, 38);
+    assert_eq!(q.quantized_bytes.len(), 38);
+}
+
+#[test]
+fn test_mcts_chunk_router_uct() {
+    let mut router = MctsChunkRouter::new();
+    router.update_route("route_a", 0.9);
+    router.update_route("route_a", 0.85);
+
+    let routes = vec!["route_a".to_string(), "route_b".to_string()];
+    let chosen = router.select_best_route(&routes).unwrap();
+    assert_eq!(chosen, "route_b"); // Route B is unvisited -> UCT gives infinite priority to explore
 }
 
 #[test]

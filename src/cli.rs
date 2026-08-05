@@ -517,6 +517,14 @@ pub struct Cli {
     #[arg(long = "ultracdc")]
     pub ultracdc: bool,
 
+    /// Enable TurboQuant Vector Quantization Chunk Compression Engine
+    #[arg(long = "turboquant")]
+    pub turboquant: bool,
+
+    /// Enable MCTS (Monte Carlo Tree Search) Intelligent Multi-Path Chunk Router
+    #[arg(long = "mcts-router")]
+    pub mcts_router: bool,
+
     /// Force classic Adler-32 & MD5 Delta Engine algorithm
     #[arg(long = "adler-md5", alias = "adler32-md5")]
     pub adler_md5: bool,

@@ -10,6 +10,7 @@ pub mod http;
 pub mod http2;
 pub mod http3;
 pub mod imap;
+pub mod mcts_quant;
 pub mod mqtt;
 pub mod pop3;
 pub mod rrsync;

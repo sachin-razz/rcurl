@@ -1,4 +1,4 @@
-//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC).
+//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC, TurboQuant, MCTS Router).
 //!
 //! # Example Doc-Tests
 //! ```rust
@@ -37,6 +37,18 @@
 //! use rcurl::modules::ultracdc::UltraCdcEngine;
 //! let ucdc = UltraCdcEngine::new(512, 1024, 2048);
 //! assert_eq!(ucdc.avg_size, 1024);
+//! ```
+//!
+//! ```rust
+//! use rcurl::modules::mcts_quant::{TurboQuantEngine, MctsChunkRouter};
+//! let tq = TurboQuantEngine::new(8);
+//! let q_chunk = tq.quantize_bytes(b"TurboQuant compression payload");
+//! assert_eq!(q_chunk.original_size, 30);
+//!
+//! let mut router = MctsChunkRouter::new();
+//! router.update_route("wifi-5ghz", 0.95);
+//! let best = router.select_best_route(&["wifi-5ghz".to_string(), "5g-cellular".to_string()]).unwrap();
+//! assert_eq!(best, "5g-cellular"); // Unvisited 5G prioritized for exploration
 //! ```
 
 pub mod cli;
