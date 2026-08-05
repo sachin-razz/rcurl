@@ -31,6 +31,23 @@ It acts as a drop-in replacement for both **`curl`** and **`wget`**!
 
 ---
 
+## 📦 1-Step Installation Matrix (All Package Managers)
+
+| OS / Platform | Package Manager | 1-Step Install Command |
+| :--- | :--- | :--- |
+| **macOS & Linux** | **Homebrew** | `brew install sachin-razz/tap/rcurl` |
+| **Windows** | **WinGet** | `winget install rcurl` |
+| **Windows** | **Chocolatey** | `choco install rcurl` |
+| **Windows** | **Scoop** | `scoop install rcurl` |
+| **Debian / Ubuntu** | **APT** | `sudo apt install rcurl` |
+| **Fedora / RHEL** | **DNF** | `sudo dnf install rcurl` |
+| **Arch Linux** | **AUR** | `yay -S rcurl-bin` |
+| **Alpine Linux** | **APK** | `apk add rcurl` |
+| **Universal Linux** | **Snap** | `snap install rcurl` |
+| **Universal 1-Line Script** | **Curl Installer** | `curl -sSL https://raw.githubusercontent.com/sachin-razz/rcurl/master/install.sh \| bash` |
+
+---
+
 ## 🛠️ Usage Examples
 
 ```bash
