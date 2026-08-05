@@ -1,6 +1,6 @@
 [package]
 name = "rcurl"
-version = "0.4.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["Sachin Rajpurohit"]
 description = "Brutally Optimized 16-Thread Tokio Parallel Streaming CLI HTTP Client"

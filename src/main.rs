@@ -75,7 +75,7 @@ async fn run_app(cli: Cli) -> Result<()> {
 
         loop {
             count += 1;
-            if !cli_arc.silent && !cli_arc.json {
+            if !cli_arc.silent && !cli_arc.json_output {
                 println!(
                     "\n{} Poll #{} (Interval: {:?})",
                     "👀 WATCH LOOP:".bold().magenta(),

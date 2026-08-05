@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use futures_util::StreamExt;
 use md5::Md5;
-use reqwest::header::{HeaderName, HeaderValue, ACCEPT_RANGES, CONTENT_LENGTH, RANGE};
+use reqwest::header::{HeaderName, HeaderValue, ACCEPT_RANGES, CONTENT_LENGTH, COOKIE, RANGE, REFERER};
 use reqwest::{Client, Proxy};
 use sha2::{Digest, Sha256};
 #[cfg(unix)]
@@ -27,7 +27,7 @@ pub struct CurlEngine {
 impl CurlEngine {
     pub fn new(cli: &Cli) -> Result<Self> {
         let mut builder = Client::builder()
-            .pool_max_idle_per_host(cli.threads)
+            .pool_max_idle_per_host(cli.threads.max(cli.parallel_max))
             .pool_idle_timeout(Duration::from_secs(90))
             .tcp_nodelay(true)
             .tcp_keepalive(Duration::from_secs(60));
@@ -50,20 +50,26 @@ impl CurlEngine {
             builder = builder.redirect(reqwest::redirect::Policy::none());
         }
 
-        if cli.http2 {
+        if cli.http2 || cli.http2_prior_knowledge {
             builder = builder.http2_prior_knowledge();
         }
 
-        if let Some(ref proxy_url) = cli.proxy {
-            let proxy = Proxy::all(proxy_url)
-                .with_context(|| format!("Failed to configure proxy {}", proxy_url))?;
+        // Configure Proxy (support -x, --proxy, --socks5, --socks5-hostname)
+        if let Some(ref proxy_url) = cli.proxy.as_ref().or(cli.socks5.as_ref()).or(cli.socks5_hostname.as_ref()) {
+            let p_str = if proxy_url.contains("://") {
+                proxy_url.to_string()
+            } else {
+                format!("socks5://{}", proxy_url)
+            };
+            let proxy = Proxy::all(&p_str)
+                .with_context(|| format!("Failed to configure proxy {}", p_str))?;
             builder = builder.proxy(proxy);
         }
 
         if let Some(ref ua) = cli.user_agent {
             builder = builder.user_agent(ua);
         } else {
-            builder = builder.user_agent("rcurl/0.5.0 (Brutally Optimized 16-Thread Tokio Stream Engine)");
+            builder = builder.user_agent("rcurl/1.0.0 (Full 250-Flag Curl Engine)");
         }
 
         if let Some(timeout_secs) = cli.timeout {
@@ -93,7 +99,7 @@ impl CurlEngine {
                     if attempts > max_retries {
                         return Err(err);
                     }
-                    if !cli.silent && !cli.json {
+                    if !cli.silent && !cli.json_output {
                         eprintln!(
                             "{} Connection failed: {}. Retrying ({}/{})...",
                             "⚠".yellow().bold(),
@@ -110,7 +116,9 @@ impl CurlEngine {
 
     async fn fetch_stream(&self, url: &str, cli: &Cli) -> Result<()> {
         let start_time = Instant::now();
-        let method = if cli.upload_file.is_some() {
+        let method = if cli.head_only {
+            "HEAD".to_string()
+        } else if cli.upload_file.is_some() {
             "PUT".to_string()
         } else {
             cli.method.to_uppercase()
@@ -132,7 +140,7 @@ impl CurlEngine {
         let probe_res = self.probe_server(url, cli).await;
 
         if let (Some(path), Ok((content_length, supports_ranges))) = (target_file.clone(), probe_res) {
-            if supports_ranges && content_length > 1_000_000 && cli.threads > 1 && method == "GET" && cli.data.is_none() && cli.json_payload.is_none() {
+            if supports_ranges && content_length > 1_000_000 && cli.threads > 1 && method == "GET" && cli.data.is_none() && cli.data_raw.is_none() && cli.json_payload.is_none() {
                 return self
                     .download_parallel_16_thread(url, &path, content_length, cli, start_time)
                     .await;
@@ -186,7 +194,7 @@ impl CurlEngine {
         let num_threads = cli.threads.max(1);
         let chunk_size = (total_size + num_threads as u64 - 1) / num_threads as u64;
 
-        if !cli.silent && !cli.json {
+        if !cli.silent && !cli.json_output {
             println!(
                 "\n{}",
                 "=========================================================================="
@@ -219,14 +227,15 @@ impl CurlEngine {
         file.set_len(total_size).await?;
         drop(file);
 
-        let main_pb = if !cli.silent && !cli.json {
+        let main_pb = if !cli.silent && !cli.json_output {
             let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
             Some(self.progress.create_main_bar(fname, total_size))
         } else {
             None
         };
 
-        let rate_limit_bytes_per_sec = cli.rate_limit.as_deref().and_then(parse_rate_limit);
+        let active_rate_limit = cli.rate_limit.as_ref().or(cli.limit_rate.as_ref());
+        let rate_limit_bytes_per_sec = active_rate_limit.and_then(|s| parse_rate_limit(s));
         let mut tasks = Vec::new();
 
         for i in 0..num_threads {
@@ -243,8 +252,10 @@ impl CurlEngine {
             let headers = cli.headers.clone();
             let user_auth = cli.user_auth.clone();
             let progress = self.progress.clone();
-            let silent = cli.silent || cli.json;
+            let silent = cli.silent || cli.json_output;
             let main_pb = main_pb.clone();
+            let cookie = cli.cookie.clone();
+            let referer = cli.referer.clone();
 
             tasks.push(tokio::spawn(async move {
                 let chunk_pb = if !silent {
@@ -259,6 +270,14 @@ impl CurlEngine {
                     if let Some((u, p)) = auth.split_once(':') {
                         req = req.basic_auth(u, Some(p));
                     }
+                }
+
+                if let Some(ref c_val) = cookie {
+                    req = req.header(COOKIE, c_val);
+                }
+
+                if let Some(ref r_val) = referer {
+                    req = req.header(REFERER, r_val);
                 }
 
                 for h in &headers {
@@ -348,7 +367,7 @@ impl CurlEngine {
 
         let (sha256_res, md5_res, comp_sha, comp_md5) = Self::verify_file_hashes(path, cli).await?;
 
-        if cli.json {
+        if cli.json_output {
             let tele = TransferTelemetry {
                 url: url.to_string(),
                 status_code: 200,
@@ -384,7 +403,9 @@ impl CurlEngine {
         cli: &Cli,
         start_time: Instant,
     ) -> Result<()> {
-        let method = if cli.upload_file.is_some() {
+        let method = if cli.head_only {
+            "HEAD".to_string()
+        } else if cli.upload_file.is_some() {
             "PUT".to_string()
         } else {
             cli.method.to_uppercase()
@@ -405,6 +426,14 @@ impl CurlEngine {
             }
         }
 
+        if let Some(ref c_val) = cli.cookie {
+            req = req.header(COOKIE, c_val);
+        }
+
+        if let Some(ref r_val) = cli.referer {
+            req = req.header(REFERER, r_val);
+        }
+
         for h in &cli.headers {
             if let Some((k, v)) = h.split_once(':') {
                 if let (Ok(hn), Ok(hv)) = (HeaderName::from_str(k.trim()), HeaderValue::from_str(v.trim())) {
@@ -418,8 +447,8 @@ impl CurlEngine {
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .body(json_body.clone());
-        } else if let Some(ref data) = cli.data {
-            req = req.body(data.clone());
+        } else if let Some(ref data) = cli.data.as_ref().or(cli.data_raw.as_ref()).or(cli.data_binary.as_ref()).or(cli.data_urlencode.as_ref()) {
+            req = req.body(data.to_string());
         } else if let Some(ref up_file) = cli.upload_file {
             let file_bytes = fs::read(up_file).await.context("Failed to read upload file")?;
             req = req.body(file_bytes);
@@ -442,7 +471,7 @@ impl CurlEngine {
             req = req.header(RANGE, format!("bytes={}-", resume_offset));
         }
 
-        if cli.verbose && !cli.json {
+        if cli.verbose && !cli.json_output {
             eprintln!("{} {} {}", ">".cyan().bold(), method.bold(), url);
             for h in &cli.headers {
                 eprintln!("{} {}", ">".cyan(), h);
@@ -452,14 +481,13 @@ impl CurlEngine {
         let response = req.send().await.context("Failed to send HTTP request")?;
         let status = response.status();
 
-        if cli.verbose && !cli.json {
+        if cli.verbose && !cli.json_output {
             eprintln!("{} {}", "<".green().bold(), status);
             for (k, v) in response.headers() {
                 eprintln!("{} {}: {}", "<".green(), k.as_str().yellow(), v.to_str().unwrap_or(""));
             }
         }
 
-        // Handle --dump-header
         if let Some(ref dump_path) = cli.dump_header {
             let mut dump = String::new();
             dump.push_str(&format!("HTTP/1.1 {}\n", status));
@@ -470,13 +498,13 @@ impl CurlEngine {
             fs::write(dump_path, dump).await?;
         }
 
-        if !status.is_success() && status != reqwest::StatusCode::PARTIAL_CONTENT {
-            anyhow::bail!("Server returned HTTP {}", status);
+        if cli.fail_fast && !status.is_success() {
+            anyhow::bail!("HTTP Error: {}", status);
         }
 
         let total_size = response.content_length().unwrap_or(0) + resume_offset;
 
-        if cli.include_headers && !cli.json {
+        if cli.include_headers && !cli.json_output {
             println!("HTTP/1.1 {}", status);
             for (k, v) in response.headers() {
                 println!("{}: {}", k.as_str(), v.to_str().unwrap_or(""));
@@ -484,7 +512,7 @@ impl CurlEngine {
             println!();
         }
 
-        let pb = if !cli.silent && !cli.json && target_file.is_some() {
+        let pb = if !cli.silent && !cli.json_output && target_file.is_some() {
             let fname = target_file
                 .as_ref()
                 .and_then(|p| p.file_name())
@@ -498,7 +526,8 @@ impl CurlEngine {
         };
 
         let mut stream = response.bytes_stream();
-        let rate_limit_bytes_per_sec = cli.rate_limit.as_deref().and_then(parse_rate_limit);
+        let active_rate_limit = cli.rate_limit.as_ref().or(cli.limit_rate.as_ref());
+        let rate_limit_bytes_per_sec = active_rate_limit.and_then(|s| parse_rate_limit(s));
         let stream_start_time = Instant::now();
         let mut total_bytes_downloaded = 0u64;
 
@@ -570,7 +599,7 @@ impl CurlEngine {
         let sha256_verified = cli.sha256.as_ref().map(|expected| expected.eq_ignore_ascii_case(&computed_sha256));
         let md5_verified = cli.md5.as_ref().map(|expected| expected.eq_ignore_ascii_case(&computed_md5));
 
-        if cli.json {
+        if cli.json_output {
             let tele = TransferTelemetry {
                 url: url.to_string(),
                 status_code: status.as_u16(),
