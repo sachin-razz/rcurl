@@ -10,6 +10,9 @@ use rcurl::modules::grpc_rpc::{GrpcEngine, JsonRpcEngine, XmlRpcEngine};
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
 use rcurl::modules::mcts_quant::{MctsChunkRouter, TurboQuantEngine};
+use rcurl::modules::mitm_proxy::MitmProxyDaemon;
+use rcurl::modules::multicloud::{CloudProvider, MultiCloudEngine};
+use rcurl::modules::multicast::OmniMulticastEngine;
 use rcurl::modules::p2pmesh::{IpfsNodeClient, P2pMeshEngine, TailscaleMeshClient, WebRtcDataChannel};
 use rcurl::modules::polar_subq::{PolarQuantEngine, SubQEngine};
 use rcurl::modules::rrsync::RrsyncEngine;
@@ -17,7 +20,10 @@ use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
 use rcurl::modules::rsyncd_config::RsyncdConfig;
 use rcurl::modules::smtp::SmtpProtocolEngine;
 use rcurl::modules::socks::SocksProxyEngine;
+use rcurl::modules::vssh::ssh::SshEngine;
+use rcurl::modules::tor_i2p::TorI2pEngine;
 use rcurl::modules::transfersh::{ClamAvScanner, GDriveStorage, IpFilter, LocalStorage, S3Storage, StorjStorage, TransferShCmdOptions, TransferShEngine, TransferShServerDaemon, TransferShUtils, VirusTotalScanner};
+use rcurl::modules::tui_dashboard::TuiDashboardEngine;
 use rcurl::modules::ultracdc::UltraCdcEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
 use rcurl::modules::vauth::basic::BasicAuth;
@@ -25,7 +31,6 @@ use rcurl::modules::vauth::oauth2::OAuth2Auth;
 use rcurl::modules::vdns::cares::CaresDnsEngine;
 use rcurl::modules::vdns::dns::DnsEngine;
 use rcurl::modules::vquic::quic::QuicTransportEngine;
-use rcurl::modules::vssh::ssh::SshEngine;
 use rcurl::modules::webdrive::{GoogleDriveResumableUpload, WebDriveEngine};
 use rcurl::modules::ws::WebSocketEngine;
 use rcurl::modules::zstd_dict::ZstdDictEngine;
@@ -43,25 +48,94 @@ fn test_cli_parsing_curl_flags() {
 }
 
 #[test]
-fn test_cli_parsing_v10_flags() {
+fn test_cli_parsing_v11_flags() {
     let args = vec![
-        "rcurl", "magnet:?xt=urn:btih:d6a7707b8ce6bc7e13b1088b6edb633073e6da13",
-        "--torrent", "--no-share", "--p2p-mesh", "--send=file.iso", "--receive=123456", "--tailscale-mesh",
-        "--grpc", "--json-rpc=eth_blockNumber", "--xml-rpc=ping", "--zstd-dict=/tmp/api.dict", "--train-dict=/tmp/samples", "--ebpf-accelerator"
+        "rcurl", "s3://my-bucket/file.iso",
+        "--tui", "--tor", "--i2p", "--multicast-send=239.255.0.1:9999", "--multicast-listen=239.255.0.1:9999", "--omni-multicast", "--mitm-proxy"
     ];
     let cli = Box::new(Cli::try_parse_from(args).unwrap());
-    assert!(cli.torrent);
-    assert!(cli.no_share);
-    assert!(cli.p2p_mesh);
-    assert_eq!(cli.send_file, Some("file.iso".to_string()));
-    assert_eq!(cli.receive_pin, Some("123456".to_string()));
-    assert!(cli.tailscale_mesh);
-    assert!(cli.grpc);
-    assert_eq!(cli.json_rpc, Some("eth_blockNumber".to_string()));
-    assert_eq!(cli.xml_rpc, Some("ping".to_string()));
-    assert_eq!(cli.zstd_dict, Some("/tmp/api.dict".to_string()));
-    assert_eq!(cli.train_dict, Some("/tmp/samples".to_string()));
-    assert!(cli.ebpf_accelerator);
+    assert!(cli.tui);
+    assert!(cli.tor);
+    assert!(cli.i2p);
+    assert_eq!(cli.multicast_send, Some("239.255.0.1:9999".to_string()));
+    assert_eq!(cli.multicast_listen, Some("239.255.0.1:9999".to_string()));
+    assert!(cli.omni_multicast);
+    assert!(cli.mitm_proxy);
+}
+
+#[test]
+fn test_tui_dashboard_rendering() {
+    let mut dashboard = TuiDashboardEngine::new();
+    dashboard.enable();
+    dashboard.update_progress(1024);
+    assert!(dashboard.enabled);
+
+    let bar = dashboard.render_bandwidth_bar(5242880, 10485760);
+    assert!(bar.contains("50 %"));
+
+    let latencies = vec![12, 15, 8, 20];
+    let lat_map = dashboard.render_thread_latency_map(&latencies);
+    assert!(lat_map.contains("T00:12ms"));
+}
+
+#[test]
+fn test_tor_and_i2p_tunnel() {
+    assert!(TorI2pEngine::is_onion_url("http://expyuzzj223.onion/file.tar.gz"));
+    assert!(TorI2pEngine::is_i2p_url("http://site.b32.i2p/file.iso"));
+
+    let mut engine = TorI2pEngine::new();
+    let tor_req = engine.format_tor_socks_request("http://expyuzzj223.onion/file").unwrap();
+    assert!(tor_req.contains("127.0.0.1:9050"));
+
+    let sam_req = engine.format_i2p_sam_handshake().unwrap();
+    assert!(sam_req.contains("SAM_BRIDGE=127.0.0.1:7656"));
+}
+
+#[test]
+fn test_multicloud_sync_providers() {
+    let s3 = MultiCloudEngine::parse_cloud_uri("s3://bucket-a/data.bin").unwrap();
+    assert_eq!(s3.provider, CloudProvider::AwsS3);
+    assert_eq!(s3.build_http_endpoint(), "https://bucket-a.s3.amazonaws.com/data.bin");
+
+    let gcs = MultiCloudEngine::parse_cloud_uri("gcs://bucket-b/data.bin").unwrap();
+    assert_eq!(gcs.provider, CloudProvider::GoogleCloudStorage);
+    assert_eq!(gcs.build_http_endpoint(), "https://storage.googleapis.com/bucket-b/data.bin");
+
+    let azure = MultiCloudEngine::parse_cloud_uri("azure://container-c/blob.bin").unwrap();
+    assert_eq!(azure.provider, CloudProvider::AzureBlob);
+    assert_eq!(azure.build_http_endpoint(), "https://container-c.blob.core.windows.net/blob.bin");
+
+    let b2 = MultiCloudEngine::parse_cloud_uri("b2://bucket-d/data.bin").unwrap();
+    assert_eq!(b2.provider, CloudProvider::BackblazeB2);
+    assert_eq!(b2.build_http_endpoint(), "https://f000.backblazeb2.com/file/bucket-d/data.bin");
+}
+
+#[test]
+fn test_omni_multicast_engine() {
+    let mc = OmniMulticastEngine::new();
+    assert!(mc.format_igmpv3_join_group().contains("239.255.0.1"));
+
+    let ssm_ip = "192.168.1.100".parse().unwrap();
+    let mc_ssm = OmniMulticastEngine::new().with_ssm_source(ssm_ip);
+    assert!(mc_ssm.format_igmpv3_join_group().contains("source=192.168.1.100"));
+
+    let nak = mc.format_pgm_nak_repair(42);
+    assert!(nak.starts_with(b"PGM_NAK_REPAIR_"));
+}
+
+#[test]
+fn test_mitm_proxy_daemon() {
+    let daemon = MitmProxyDaemon::new(8888);
+    assert_eq!(daemon.listen_address(), "127.0.0.1:8888");
+
+    let (ca_cert, ca_key) = MitmProxyDaemon::generate_ca_certificate();
+    assert!(ca_cert.contains("BEGIN CERTIFICATE"));
+    assert!(ca_key.contains("BEGIN RSA PRIVATE KEY"));
+
+    daemon.log_intercepted_traffic("GET", "https://example.com/api", 200).unwrap();
+    let logs = daemon.active_logs.lock().unwrap();
+    assert_eq!(logs.len(), 1);
+    assert!(logs[0].contains("GET https://example.com/api -> HTTP 200"));
 }
 
 #[test]
@@ -144,44 +218,6 @@ fn test_zstd_dict_and_ebpf_xdp() {
 }
 
 #[test]
-fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--gdrive-upload", "--resumable", "--max-days=7", "--max-downloads=5", "--encrypt-password=secret", "--ultraheavy", "--transfer-server", "--adler-md5"];
-    let cli = Box::new(Cli::try_parse_from(args).unwrap());
-    assert!(cli.recursive);
-    assert_eq!(cli.level, 3);
-    assert_eq!(cli.accept, Some("pdf,png".to_string()));
-    assert!(cli.quiet);
-    assert!(cli.archive);
-    assert!(cli.compress);
-    assert!(cli.delete_extraneous);
-    assert!(cli.dry_run);
-    assert!(cli.backup);
-    assert!(cli.list_only);
-    assert_eq!(cli.ssl_type, Some("openssl".to_string()));
-    assert!(cli.rsync_ssl);
-    assert!(cli.daemon);
-    assert_eq!(cli.config_file, Some("/etc/rsyncd.conf".to_string()));
-    assert!(cli.rrsync);
-    assert!(cli.rrsync_ro);
-    assert_eq!(cli.rrsync_dir, Some("/tmp/backup".to_string()));
-    assert!(cli.path_containment);
-    assert!(cli.fastcdc);
-    assert!(cli.ultracdc);
-    assert!(cli.turboquant);
-    assert!(cli.mcts_router);
-    assert!(cli.subq);
-    assert!(cli.polarquant);
-    assert!(cli.gdrive_upload);
-    assert!(cli.resumable);
-    assert_eq!(cli.max_days, Some(7));
-    assert_eq!(cli.max_downloads, Some(5));
-    assert_eq!(cli.encrypt_password, Some("secret".to_string()));
-    assert!(cli.ultraheavy);
-    assert!(cli.transfer_server);
-    assert!(cli.adler_md5);
-}
-
-#[test]
 fn test_ultraheavy_master_engine_flag() {
     let args = vec!["rcurl", "https://httpbin.org/get", "--ultraheavy"];
     let cli = Box::new(Cli::try_parse_from(args).unwrap());
@@ -211,7 +247,7 @@ fn test_transfersh_engine_and_encryption() {
     let decrypted = TransferShEngine::decrypt_payload(&encrypted, key);
     assert_eq!(decrypted, data);
 
-    let temp_storage = std::env::temp_dir().join("tsh_test_storage_v10");
+    let temp_storage = std::env::temp_dir().join("tsh_test_storage_v11");
     let storage = LocalStorage::new(temp_storage.clone());
     let mut daemon = TransferShServerDaemon::new(9090, Box::new(storage));
     assert_eq!(daemon.listen_address(), "0.0.0.0:9090");

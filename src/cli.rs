@@ -609,6 +609,34 @@ pub struct Cli {
     #[arg(long = "ebpf-accelerator")]
     pub ebpf_accelerator: bool,
 
+    /// Launch Interactive Terminal TUI Dashboard
+    #[arg(long = "tui", alias = "dashboard")]
+    pub tui: bool,
+
+    /// Force Tor SOCKS5 Onion circuit routing for .onion URLs
+    #[arg(long = "tor", alias = "onion")]
+    pub tor: bool,
+
+    /// Force I2P SAM v3 bridge routing for .i2p URLs
+    #[arg(long = "i2p")]
+    pub i2p: bool,
+
+    /// Broadcast file via Omni-Multicast stream
+    #[arg(long = "multicast-send", value_name = "ADDR:PORT")]
+    pub multicast_send: Option<String>,
+
+    /// Listen and receive Omni-Multicast broadcast stream
+    #[arg(long = "multicast-listen", value_name = "ADDR:PORT")]
+    pub multicast_listen: Option<String>,
+
+    /// Enable Omni-Multicast dual-stack IPv4/IPv6 SSM & PGM FEC repair engine
+    #[arg(long = "omni-multicast")]
+    pub omni_multicast: bool,
+
+    /// Launch TLS MITM Proxy Interceptor & Traffic Inspector Daemon
+    #[arg(long = "mitm-proxy")]
+    pub mitm_proxy: bool,
+
     /// Enable embedded Transfer.sh Server Daemon
     #[arg(long = "transfer-server")]
     pub transfer_server: bool,
