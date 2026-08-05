@@ -13,17 +13,17 @@ pub struct Cli {
     #[arg(value_name = "URL")]
     pub urls: Vec<String>,
 
-    /// Read URLs from a local input text file (Wget -i / --input-file)
-    #[arg(short = 'i', long = "input-file", value_name = "FILE")]
+    /// Read URLs from a local input text file (Wget --input-file)
+    #[arg(long = "input-file", value_name = "FILE")]
     pub input_file: Option<PathBuf>,
 
-    /// Run in background immediately (Wget -b / --background)
-    #[arg(short = 'b', long = "background")]
+    /// Run in background immediately (Wget --background)
+    #[arg(long = "background")]
     pub background: bool,
 
-    /// Execute command as if part of .wgetrc (Wget -e / --execute)
-    #[arg(short = 'e', long = "execute", value_name = "COMMAND")]
-    pub execute_cmd: Vec<String>,
+    /// Execute command as if part of .wgetrc (Wget --execute)
+    #[arg(long = "execute", value_name = "COMMAND")]
+    pub execute_cmd: Option<String>,
 
     /// Log messages to logfile (Wget -o / --output-file)
     #[arg(short = 'g', long = "output-file", value_name = "LOGFILE")]
@@ -297,8 +297,8 @@ pub struct Cli {
     #[arg(long = "ca-directory", value_name = "DIR")]
     pub ca_directory: Option<PathBuf>,
 
-    /// Enable recursive web crawling & downloading (Wget -r / --recursive)
-    #[arg(short = 'r', long = "recursive")]
+    /// Enable recursive web crawling & downloading (Wget --recursive)
+    #[arg(long = "recursive")]
     pub recursive: bool,
 
     /// Maximum recursion depth level for web crawling (Wget -l / --level)
@@ -310,15 +310,15 @@ pub struct Cli {
     pub delete_after: bool,
 
     /// Convert links for local offline viewing (Wget -k / --convert-links)
-    #[arg(short = 'k', long = "convert-links")]
+    #[arg(long = "convert-links")]
     pub convert_links: bool,
 
     /// Backup original files with .orig suffix before converting (Wget -K / --backup-converted)
     #[arg(long = "backup-converted")]
     pub backup_converted: bool,
 
-    /// Mirror website recursively with timestamping (Wget -m / --mirror)
-    #[arg(short = 'm', long = "mirror")]
+    /// Mirror website recursively with timestamping (Wget --mirror)
+    #[arg(long = "mirror")]
     pub mirror: bool,
 
     /// Download all page requisites (CSS, JS, images) for offline viewing (Wget -p)
@@ -329,8 +329,8 @@ pub struct Cli {
     #[arg(long = "strict-comments")]
     pub strict_comments: bool,
 
-    /// Comma-separated list of accepted file extensions (Wget -A / --accept)
-    #[arg(short = 'A', long = "accept", value_name = "LIST")]
+    /// Comma-separated list of accepted file extensions (Wget --accept)
+    #[arg(long = "accept", value_name = "LIST")]
     pub accept: Option<String>,
 
     /// Comma-separated list of rejected file extensions (Wget -R / --reject)
