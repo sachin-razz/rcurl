@@ -3,7 +3,10 @@
 > **The Unified Next-Gen Data Transfer Engine for Mankind**
 > **Merging `curl` + `wget` + `rsync` + BitTorrent P2P + Multi-Cloud + gRPC into a 16-Thread Tokio Parallel Engine (< 1 MB RAM)**
 
-For complete engineering philosophy, architectural layers, and vision docs, see [**docs/VISION.md**](file:///Users/sachinrajpurohit/Developer/sandbox/wifipasswordcracker/rcurl/docs/VISION.md).
+For complete documentation:
+- 📖 [**docs/VISION.md**](file:///Users/sachinrajpurohit/Developer/sandbox/wifipasswordcracker/rcurl/docs/VISION.md) - Engineering Vision & 5-Layer Architecture
+- 📑 [**docs/CLI_PARAMETERS.md**](file:///Users/sachinrajpurohit/Developer/sandbox/wifipasswordcracker/rcurl/docs/CLI_PARAMETERS.md) - Full CLI Flags & Parameters Reference
+- 📦 [**docs/INSTALLATION.md**](file:///Users/sachinrajpurohit/Developer/sandbox/wifipasswordcracker/rcurl/docs/INSTALLATION.md) - Package Managers & Linux Distro Installers
 
 ---
 
