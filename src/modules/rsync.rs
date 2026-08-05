@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use md5::{Digest, Md5};
+use std::env;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -184,5 +185,56 @@ impl RsyncEngine {
         stats.transferred_files = 1;
         stats.transferred_bytes = src_bytes.len() as u64;
         Ok(stats)
+    }
+}
+
+/// Rsync SSL helper engine (rsync-ssl manpage specification)
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct RsyncSslEngine {
+    pub ssl_type: String,
+    pub ssl_port: u16,
+    pub cert_file: Option<String>,
+    pub key_file: Option<String>,
+    pub ca_cert_file: Option<String>,
+}
+
+impl Default for RsyncSslEngine {
+    fn default() -> Self {
+        let ssl_type = env::var("RSYNC_SSL_TYPE").unwrap_or_else(|_| "openssl".to_string());
+        let ssl_port = env::var("RSYNC_SSL_PORT")
+            .ok()
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or(874);
+
+        Self {
+            ssl_type,
+            ssl_port,
+            cert_file: env::var("RSYNC_SSL_CERT").ok(),
+            key_file: env::var("RSYNC_SSL_KEY").ok(),
+            ca_cert_file: env::var("RSYNC_SSL_CA_CERT").ok(),
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl RsyncSslEngine {
+    pub fn new(ssl_type: Option<String>, port: Option<u16>) -> Self {
+        let mut engine = Self::default();
+        if let Some(st) = ssl_type {
+            engine.ssl_type = st;
+        }
+        if let Some(p) = port {
+            engine.ssl_port = p;
+        }
+        engine
+    }
+
+    /// Build SSL transport connection string
+    pub fn build_ssl_connection_command(&self, host: &str, module: &str) -> String {
+        format!(
+            "{} s_client -connect {}:{} -servername {} (module: {})",
+            self.ssl_type, host, self.ssl_port, host, module
+        )
     }
 }

@@ -5,7 +5,7 @@ use rcurl::modules::cookie::CookieStore;
 use rcurl::modules::ftp::FtpProtocolEngine;
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
-use rcurl::modules::rsync::RsyncEngine;
+use rcurl::modules::rsync::{RsyncEngine, RsyncSslEngine};
 use rcurl::modules::smtp::SmtpProtocolEngine;
 use rcurl::modules::socks::SocksProxyEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
@@ -31,7 +31,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -43,6 +43,18 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.dry_run);
     assert!(cli.backup);
     assert!(cli.list_only);
+    assert_eq!(cli.ssl_type, Some("openssl".to_string()));
+    assert!(cli.rsync_ssl);
+}
+
+#[test]
+fn test_rsync_ssl_engine() {
+    let engine = RsyncSslEngine::new(Some("openssl".to_string()), Some(874));
+    assert_eq!(engine.ssl_port, 874);
+    assert_eq!(engine.ssl_type, "openssl");
+    let cmd = engine.build_ssl_connection_command("example.com", "mod");
+    assert!(cmd.contains("874"));
+    assert!(cmd.contains("example.com"));
 }
 
 #[test]

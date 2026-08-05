@@ -1,6 +1,6 @@
 [package]
 name = "rcurl"
-version = "5.1.0"
+version = "5.2.0"
 edition = "2024"
 authors = ["Sachin Rajpurohit"]
 description = "16-Thread Tokio Streaming CLI Downloader (Pure Rust Native Engine + C libcurl Module)"

@@ -453,6 +453,14 @@ pub struct Cli {
     #[arg(long = "mkpath")]
     pub mkpath: bool,
 
+    /// Rsync SSL helper connection type: openssl, stunnel, gnutls (Rsync-ssl --type)
+    #[arg(long = "type", value_name = "SSL_TYPE")]
+    pub ssl_type: Option<String>,
+
+    /// Enable SSL/TLS encryption for Rsync daemon transfer (Rsync-ssl)
+    #[arg(long = "rsync-ssl")]
+    pub rsync_ssl: bool,
+
     /// Span across hosts during recursive download (Wget -H / --span-hosts)
     #[arg(long = "span-hosts")]
     pub span_hosts: bool,
