@@ -11,6 +11,7 @@ pub mod http3;
 pub mod imap;
 pub mod mqtt;
 pub mod pop3;
+pub mod rrsync;
 pub mod rsync;
 pub mod rsyncd_config;
 pub mod rtsp;

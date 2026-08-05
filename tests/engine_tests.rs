@@ -5,6 +5,7 @@ use rcurl::modules::cookie::CookieStore;
 use rcurl::modules::ftp::FtpProtocolEngine;
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
+use rcurl::modules::rrsync::RrsyncEngine;
 use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
 use rcurl::modules::rsyncd_config::RsyncdConfig;
 use rcurl::modules::smtp::SmtpProtocolEngine;
@@ -32,7 +33,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -48,6 +49,24 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.rsync_ssl);
     assert!(cli.daemon);
     assert_eq!(cli.config_file, Some("/etc/rsyncd.conf".to_string()));
+    assert!(cli.rrsync);
+    assert!(cli.rrsync_ro);
+    assert_eq!(cli.rrsync_dir, Some("/tmp/backup".to_string()));
+}
+
+#[test]
+fn test_rrsync_restricted_engine() {
+    let engine = RrsyncEngine::new("/tmp").read_only().munge_symlinks();
+    assert!(engine.read_only);
+    assert!(engine.no_delete);
+    assert!(engine.munge_symlinks);
+
+    let cmd = engine.build_server_command();
+    assert!(cmd.contains(&"--sender".to_string()));
+    assert!(cmd.contains(&"--munge-links".to_string()));
+
+    let target = engine.validate_path(std::path::Path::new("sub/file.txt")).unwrap();
+    assert!(target.to_str().unwrap().ends_with("sub/file.txt"));
 }
 
 #[test]

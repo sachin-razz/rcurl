@@ -1,4 +1,4 @@
-//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd).
+//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync).
 //!
 //! # Example Doc-Tests
 //! ```rust
@@ -18,6 +18,13 @@
 //! let config = RsyncdConfig::parse_str("port = 873\n[pub]\npath = /tmp", None).unwrap();
 //! assert_eq!(config.port, 873);
 //! assert!(config.modules.contains_key("pub"));
+//! ```
+//!
+//! ```rust
+//! use rcurl::modules::rrsync::RrsyncEngine;
+//! let engine = RrsyncEngine::new("/tmp").read_only().munge_symlinks();
+//! assert!(engine.read_only);
+//! assert!(engine.munge_symlinks);
 //! ```
 
 pub mod cli;

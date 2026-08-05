@@ -477,6 +477,34 @@ pub struct Cli {
     #[arg(long = "dparam", value_name = "PARAM=VALUE")]
     pub dparam: Vec<String>,
 
+    /// Enable restricted rsync SSH mode (rrsync)
+    #[arg(long = "rrsync")]
+    pub rrsync: bool,
+
+    /// Restricted root directory path for rrsync (rrsync DIR)
+    #[arg(long = "rrsync-dir", value_name = "DIR")]
+    pub rrsync_dir: Option<String>,
+
+    /// Allow only reading from restricted DIR (rrsync -ro)
+    #[arg(long = "rrsync-ro")]
+    pub rrsync_ro: bool,
+
+    /// Allow only writing to restricted DIR (rrsync -wo)
+    #[arg(long = "rrsync-wo")]
+    pub rrsync_wo: bool,
+
+    /// Enable symlink munging on server side (rrsync -munge)
+    #[arg(long = "rrsync-munge")]
+    pub rrsync_munge: bool,
+
+    /// Disable delete and remove options in rrsync (rrsync -no-del)
+    #[arg(long = "rrsync-no-del")]
+    pub rrsync_no_del: bool,
+
+    /// Prevent overwriting existing files in rrsync (rrsync -no-overwrite)
+    #[arg(long = "rrsync-no-overwrite")]
+    pub rrsync_no_overwrite: bool,
+
     /// Span across hosts during recursive download (Wget -H / --span-hosts)
     #[arg(long = "span-hosts")]
     pub span_hosts: bool,
