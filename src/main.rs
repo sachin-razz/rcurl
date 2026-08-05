@@ -1,15 +1,48 @@
 mod cli;
+mod config;
 mod downloader;
 mod progress;
+mod telemetry;
 
 use anyhow::Result;
 use clap::Parser;
 use cli::Cli;
+use config::RcurlConfig;
 use downloader::CurlEngine;
 use std::sync::Arc;
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
+    let config = RcurlConfig::load_default();
+
+    // Merge ~/.rcurlrc configuration defaults if CLI flags are unspecified
+    if let Some(cfg_threads) = config.default_threads {
+        if cli.threads == 16 {
+            cli.threads = cfg_threads;
+        }
+    }
+
+    if cli.user_agent.is_none() {
+        cli.user_agent = config.user_agent;
+    }
+
+    if cli.proxy.is_none() {
+        cli.proxy = config.proxy;
+    }
+
+    if cli.rate_limit.is_none() {
+        cli.rate_limit = config.rate_limit;
+    }
+
+    if let Some(cfg_headers) = config.headers {
+        for (k, v) in cfg_headers {
+            let header_str = format!("{}: {}", k, v);
+            if !cli.headers.contains(&header_str) {
+                cli.headers.push(header_str);
+            }
+        }
+    }
+
     let thread_count = cli.threads.max(1);
 
     // Initialize Tokio runtime with user-defined or default 16 worker threads

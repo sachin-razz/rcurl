@@ -1,16 +1,19 @@
-use crate::cli::Cli;
+use crate::cli::{parse_rate_limit, Cli};
 use crate::progress::ProgressManager;
+use crate::telemetry::TransferTelemetry;
 use anyhow::{Context, Result};
 use colored::Colorize;
 use futures_util::StreamExt;
+use md5::Md5;
 use reqwest::header::{HeaderName, HeaderValue, ACCEPT_RANGES, CONTENT_LENGTH, RANGE};
-use reqwest::Client;
+use reqwest::{Client, Proxy};
+use sha2::{Digest, Sha256};
 #[cfg(unix)]
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::fs::{self, File, OpenOptions};
 use tokio::io::{self, AsyncWriteExt};
 use tokio::sync::Semaphore;
@@ -27,10 +30,21 @@ impl CurlEngine {
             .pool_max_idle_per_host(cli.threads)
             .tcp_keepalive(Duration::from_secs(30));
 
+        if cli.http2 {
+            builder = builder.http2_prior_knowledge();
+        }
+
+        // Configure SOCKS5 / HTTP / HTTPS Proxy if specified
+        if let Some(ref proxy_url) = cli.proxy {
+            let proxy = Proxy::all(proxy_url)
+                .with_context(|| format!("Failed to configure proxy {}", proxy_url))?;
+            builder = builder.proxy(proxy);
+        }
+
         if let Some(ref ua) = cli.user_agent {
             builder = builder.user_agent(ua);
         } else {
-            builder = builder.user_agent("rcurl/0.1.0 (16-Thread Tokio Stream Engine)");
+            builder = builder.user_agent("rcurl/0.2.0 (16-Thread Tokio Stream Engine)");
         }
 
         if let Some(timeout_secs) = cli.timeout {
@@ -64,7 +78,7 @@ impl CurlEngine {
                     if attempts > max_retries {
                         return Err(err);
                     }
-                    if !cli.silent {
+                    if !cli.silent && !cli.json {
                         eprintln!(
                             "{} Connection failed: {}. Retrying ({}/{})...",
                             "⚠".yellow().bold(),
@@ -80,6 +94,7 @@ impl CurlEngine {
     }
 
     async fn fetch_stream(&self, url: &str, cli: &Cli) -> Result<()> {
+        let start_time = Instant::now();
         let method = cli.method.to_uppercase();
 
         let target_file = if let Some(ref out) = cli.output {
@@ -101,16 +116,15 @@ impl CurlEngine {
         if let (Some(path), Ok((content_length, supports_ranges))) = (target_file.clone(), probe_res) {
             if supports_ranges && content_length > 1_000_000 && cli.threads > 1 && method == "GET" && cli.data.is_none() {
                 return self
-                    .download_parallel_16_thread(url, &path, content_length, cli)
+                    .download_parallel_16_thread(url, &path, content_length, cli, start_time)
                     .await;
             }
         }
 
         // Standard Single-Stream Fallback (or stdout)
-        self.download_single_stream(url, target_file, cli).await
+        self.download_single_stream(url, target_file, cli, start_time).await
     }
 
-    /// Probe server with HEAD request to check size and Range header support
     async fn probe_server(&self, url: &str, cli: &Cli) -> Result<(u64, bool)> {
         let mut req = self.client.head(url);
         if let Some(ref auth) = cli.user_auth {
@@ -144,18 +158,19 @@ impl CurlEngine {
         Ok((length, accepts_ranges))
     }
 
-    /// 16-Thread Parallel Range Chunk Streaming Engine with offset writing & multi-progress bars
+    /// 16-Thread Parallel Range Chunk Streaming Engine with offset writing & rate throttling
     async fn download_parallel_16_thread(
         &self,
         url: &str,
         path: &PathBuf,
         total_size: u64,
         cli: &Cli,
+        start_time: Instant,
     ) -> Result<()> {
         let num_threads = cli.threads.max(1);
         let chunk_size = (total_size + num_threads as u64 - 1) / num_threads as u64;
 
-        if !cli.silent {
+        if !cli.silent && !cli.json {
             println!(
                 "\n{}",
                 "=========================================================================="
@@ -176,7 +191,9 @@ impl CurlEngine {
             println!("{} File Destination : {}", "[LOG]".bold().magenta(), path.display().to_string().cyan());
             println!("{} Total Size       : {} bytes", "[LOG]".bold().magenta(), total_size.to_string().bold());
             println!("{} Worker Threads   : {}", "[LOG]".bold().magenta(), num_threads.to_string().bold().yellow());
-            println!("{} Range Pipeline   : ENABLED (16 Parallel Byte Chunks)", "[LOG]".bold().magenta());
+            if let Some(ref limit) = cli.rate_limit {
+                println!("{} Rate Limiter    : {}/s", "[LOG]".bold().magenta(), limit.bold().green());
+            }
         }
 
         if let Some(parent) = path.parent() {
@@ -185,18 +202,18 @@ impl CurlEngine {
             }
         }
 
-        // Pre-allocate destination file size on disk
         let file = File::create(path).await?;
         file.set_len(total_size).await?;
         drop(file);
 
-        let main_pb = if !cli.silent {
+        let main_pb = if !cli.silent && !cli.json {
             let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
             Some(self.progress.create_main_bar(fname, total_size))
         } else {
             None
         };
 
+        let rate_limit_bytes_per_sec = cli.rate_limit.as_deref().and_then(parse_rate_limit);
         let mut tasks = Vec::new();
 
         for i in 0..num_threads {
@@ -207,23 +224,13 @@ impl CurlEngine {
                 break;
             }
 
-            if !cli.silent && cli.verbose {
-                println!(
-                    "  {} Worker #{:<2}: Range Bytes {}-{}",
-                    "[CHUNK]".bold().blue(),
-                    i,
-                    start,
-                    end
-                );
-            }
-
             let client = self.client.clone();
             let url = url.to_string();
             let path = path.clone();
             let headers = cli.headers.clone();
             let user_auth = cli.user_auth.clone();
             let progress = self.progress.clone();
-            let silent = cli.silent;
+            let silent = cli.silent || cli.json;
             let main_pb = main_pb.clone();
 
             tasks.push(tokio::spawn(async move {
@@ -253,6 +260,8 @@ impl CurlEngine {
                 let mut stream = response.bytes_stream();
 
                 let mut offset = start;
+                let chunk_start_time = Instant::now();
+                let mut bytes_downloaded_worker = 0u64;
 
                 #[cfg(unix)]
                 {
@@ -262,6 +271,21 @@ impl CurlEngine {
                         std_file.write_all_at(&chunk, offset)?;
                         let len = chunk.len() as u64;
                         offset += len;
+                        bytes_downloaded_worker += len;
+
+                        // Rate limiting throttling
+                        if let Some(max_bps) = rate_limit_bytes_per_sec {
+                            let worker_max_bps = max_bps / num_threads as u64;
+                            if worker_max_bps > 0 {
+                                let expected_secs = bytes_downloaded_worker as f64 / worker_max_bps as f64;
+                                let actual_secs = chunk_start_time.elapsed().as_secs_f64();
+                                if actual_secs < expected_secs {
+                                    let sleep_dur = Duration::from_secs_f64(expected_secs - actual_secs);
+                                    tokio::time::sleep(sleep_dur).await;
+                                }
+                            }
+                        }
+
                         if let Some(ref cpb) = chunk_pb {
                             cpb.inc(len);
                         }
@@ -274,11 +298,13 @@ impl CurlEngine {
                 #[cfg(not(unix))]
                 {
                     let mut tok_file = OpenOptions::new().write(true).open(&path).await?;
-                    tok_file.seek(SeekFrom::Start(start)).await?;
+                    tok_file.seek(std::io::SeekFrom::Start(start)).await?;
                     while let Some(chunk_res) = stream.next().await {
                         let chunk = chunk_res?;
                         tok_file.write_all(&chunk).await?;
                         let len = chunk.len() as u64;
+                        bytes_downloaded_worker += len;
+
                         if let Some(ref cpb) = chunk_pb {
                             cpb.inc(len);
                         }
@@ -305,24 +331,48 @@ impl CurlEngine {
             mpb.finish_and_clear();
         }
 
-        if !cli.silent {
+        let elapsed = start_time.elapsed().as_secs_f64();
+        let speed_mbps = (total_size as f64 / 1_048_576.0) / elapsed.max(0.001);
+
+        // Perform Hash Verification if requested
+        let (sha256_res, md5_res, comp_sha, comp_md5) = Self::verify_file_hashes(path, cli).await?;
+
+        if cli.json {
+            let tele = TransferTelemetry {
+                url: url.to_string(),
+                status_code: 200,
+                success: true,
+                bytes_transferred: total_size,
+                elapsed_seconds: elapsed,
+                average_speed_mbps: speed_mbps,
+                sha256_verified: sha256_res,
+                md5_verified: md5_res,
+                computed_sha256: comp_sha,
+                computed_md5: comp_md5,
+                output_file: Some(path.display().to_string()),
+            };
+            println!("{}", serde_json::to_string_pretty(&tele)?);
+        } else if !cli.silent {
             println!(
-                "\n{} Successfully downloaded {} across {} Tokio streams!",
+                "\n{} Downloaded {} across {} Tokio streams in {:.2}s ({:.2} MB/s)",
                 "✔ PARALLEL STREAM COMPLETE:".bold().green(),
                 path.display().to_string().cyan(),
-                num_threads.to_string().yellow()
+                num_threads.to_string().yellow(),
+                elapsed,
+                speed_mbps
             );
         }
 
         Ok(())
     }
 
-    /// Single stream fallback for URLs or stdout streaming
+    /// Single stream fallback with on-the-fly hashing & rate throttling
     async fn download_single_stream(
         &self,
         url: &str,
         target_file: Option<PathBuf>,
         cli: &Cli,
+        start_time: Instant,
     ) -> Result<()> {
         let method = cli.method.to_uppercase();
 
@@ -370,7 +420,7 @@ impl CurlEngine {
             req = req.header(RANGE, format!("bytes={}-", resume_offset));
         }
 
-        if cli.verbose {
+        if cli.verbose && !cli.json {
             eprintln!("{} {} {}", ">".cyan().bold(), method.bold(), url);
             for h in &cli.headers {
                 eprintln!("{} {}", ">".cyan(), h);
@@ -380,7 +430,7 @@ impl CurlEngine {
         let response = req.send().await.context("Failed to send HTTP request")?;
         let status = response.status();
 
-        if cli.verbose {
+        if cli.verbose && !cli.json {
             eprintln!("{} {}", "<".green().bold(), status);
             for (k, v) in response.headers() {
                 eprintln!("{} {}: {}", "<".green(), k.as_str().yellow(), v.to_str().unwrap_or(""));
@@ -393,7 +443,7 @@ impl CurlEngine {
 
         let total_size = response.content_length().unwrap_or(0) + resume_offset;
 
-        if cli.include_headers {
+        if cli.include_headers && !cli.json {
             println!("HTTP/1.1 {}", status);
             for (k, v) in response.headers() {
                 println!("{}: {}", k.as_str(), v.to_str().unwrap_or(""));
@@ -401,7 +451,7 @@ impl CurlEngine {
             println!();
         }
 
-        let pb = if !cli.silent && target_file.is_some() {
+        let pb = if !cli.silent && !cli.json && target_file.is_some() {
             let fname = target_file
                 .as_ref()
                 .and_then(|p| p.file_name())
@@ -415,6 +465,12 @@ impl CurlEngine {
         };
 
         let mut stream = response.bytes_stream();
+        let rate_limit_bytes_per_sec = cli.rate_limit.as_deref().and_then(parse_rate_limit);
+        let stream_start_time = Instant::now();
+        let mut total_bytes_downloaded = 0u64;
+
+        let mut sha256_hasher = Sha256::new();
+        let mut md5_hasher = Md5::new();
 
         if let Some(ref path) = target_file {
             if let Some(parent) = path.parent() {
@@ -434,8 +490,22 @@ impl CurlEngine {
             while let Some(chunk_res) = stream.next().await {
                 let chunk = chunk_res.context("Error reading response stream chunk")?;
                 file.write_all(&chunk).await.context("Error writing chunk to disk")?;
+                sha256_hasher.update(&chunk);
+                md5_hasher.update(&chunk);
+
+                let len = chunk.len() as u64;
+                total_bytes_downloaded += len;
+
+                if let Some(max_bps) = rate_limit_bytes_per_sec {
+                    let expected_secs = total_bytes_downloaded as f64 / max_bps as f64;
+                    let actual_secs = stream_start_time.elapsed().as_secs_f64();
+                    if actual_secs < expected_secs {
+                        tokio::time::sleep(Duration::from_secs_f64(expected_secs - actual_secs)).await;
+                    }
+                }
+
                 if let Some(ref bar) = pb {
-                    bar.inc(chunk.len() as u64);
+                    bar.inc(len);
                 }
             }
 
@@ -445,6 +515,9 @@ impl CurlEngine {
             while let Some(chunk_res) = stream.next().await {
                 let chunk = chunk_res.context("Error reading response stream chunk")?;
                 stdout.write_all(&chunk).await.context("Error writing chunk to stdout")?;
+                sha256_hasher.update(&chunk);
+                md5_hasher.update(&chunk);
+                total_bytes_downloaded += chunk.len() as u64;
             }
             stdout.flush().await?;
         }
@@ -453,14 +526,86 @@ impl CurlEngine {
             bar.finish_and_clear();
         }
 
-        if !cli.silent && target_file.is_some() {
+        let elapsed = start_time.elapsed().as_secs_f64();
+        let speed_mbps = (total_bytes_downloaded as f64 / 1_048_576.0) / elapsed.max(0.001);
+
+        let computed_sha256 = hex::encode(sha256_hasher.finalize());
+        let computed_md5 = hex::encode(md5_hasher.finalize());
+
+        let sha256_verified = cli.sha256.as_ref().map(|expected| expected.eq_ignore_ascii_case(&computed_sha256));
+        let md5_verified = cli.md5.as_ref().map(|expected| expected.eq_ignore_ascii_case(&computed_md5));
+
+        if cli.json {
+            let tele = TransferTelemetry {
+                url: url.to_string(),
+                status_code: status.as_u16(),
+                success: status.is_success(),
+                bytes_transferred: total_bytes_downloaded,
+                elapsed_seconds: elapsed,
+                average_speed_mbps: speed_mbps,
+                sha256_verified,
+                md5_verified,
+                computed_sha256: Some(computed_sha256.clone()),
+                computed_md5: Some(computed_md5.clone()),
+                output_file: target_file.as_ref().map(|p| p.display().to_string()),
+            };
+            println!("{}", serde_json::to_string_pretty(&tele)?);
+        } else if !cli.silent && target_file.is_some() {
             eprintln!(
-                "{} Download complete: {}",
+                "{} Download complete: {} ({:.2} MB/s)",
                 "✔".green().bold(),
-                target_file.unwrap().display()
+                target_file.as_ref().unwrap().display(),
+                speed_mbps
             );
+
+            if let Some(sha_ok) = sha256_verified {
+                if sha_ok {
+                    eprintln!("{} SHA-256 Verified: {}", "✔".green().bold(), computed_sha256.cyan());
+                } else {
+                    eprintln!("{} SHA-256 MISMATCH! Expected {}, got {}", "✖".red().bold(), cli.sha256.as_ref().unwrap().yellow(), computed_sha256.red());
+                }
+            }
+
+            if let Some(md5_ok) = md5_verified {
+                if md5_ok {
+                    eprintln!("{} MD5 Verified: {}", "✔".green().bold(), computed_md5.cyan());
+                } else {
+                    eprintln!("{} MD5 MISMATCH! Expected {}, got {}", "✖".red().bold(), cli.md5.as_ref().unwrap().yellow(), computed_md5.red());
+                }
+            }
         }
 
         Ok(())
+    }
+
+    async fn verify_file_hashes(
+        path: &PathBuf,
+        cli: &Cli,
+    ) -> Result<(Option<bool>, Option<bool>, Option<String>, Option<String>)> {
+        if cli.sha256.is_none() && cli.md5.is_none() {
+            return Ok((None, None, None, None));
+        }
+
+        let mut file = File::open(path).await?;
+        let mut sha256_hasher = Sha256::new();
+        let mut md5_hasher = Md5::new();
+        let mut buffer = [0u8; 65536];
+
+        loop {
+            let n = tokio::io::AsyncReadExt::read(&mut file, &mut buffer).await?;
+            if n == 0 {
+                break;
+            }
+            sha256_hasher.update(&buffer[..n]);
+            md5_hasher.update(&buffer[..n]);
+        }
+
+        let comp_sha = hex::encode(sha256_hasher.finalize());
+        let comp_md5 = hex::encode(md5_hasher.finalize());
+
+        let sha_verified = cli.sha256.as_ref().map(|exp| exp.eq_ignore_ascii_case(&comp_sha));
+        let md5_verified = cli.md5.as_ref().map(|exp| exp.eq_ignore_ascii_case(&comp_md5));
+
+        Ok((sha_verified, md5_verified, Some(comp_sha), Some(comp_md5)))
     }
 }

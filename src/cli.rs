@@ -5,8 +5,8 @@ use std::path::PathBuf;
 #[command(
     name = "rcurl",
     author = "Sachin Rajpurohit",
-    version = "0.1.0",
-    about = "16-Thread Parallel Chunk Streaming CLI HTTP Downloader (Fast Curl Alternative)"
+    version = "0.2.0",
+    about = "Ultra-fast 16-Thread Tokio Parallel Streaming CLI HTTP Downloader"
 )]
 pub struct Cli {
     /// URL(s) to fetch / download
@@ -72,4 +72,45 @@ pub struct Cli {
     /// Maximum number of automatic retries on connection failure
     #[arg(long = "retry", default_value_t = 3, value_name = "NUM")]
     pub retries: u32,
+
+    /// Restrict maximum download speed (e.g. --rate-limit 5M, 500K)
+    #[arg(long = "rate-limit", value_name = "SPEED")]
+    pub rate_limit: Option<String>,
+
+    /// Expected SHA-256 hash to verify file integrity after streaming download
+    #[arg(long = "sha256", value_name = "HASH")]
+    pub sha256: Option<String>,
+
+    /// Expected MD5 hash to verify file integrity after streaming download
+    #[arg(long = "md5", value_name = "HASH")]
+    pub md5: Option<String>,
+
+    /// Route requests through HTTP, HTTPS, or SOCKS5 proxy (e.g. -x socks5://127.0.0.1:9050)
+    #[arg(short = 'x', long = "proxy", value_name = "URL")]
+    pub proxy: Option<String>,
+
+    /// Output telemetry metrics and transfer results in JSON format
+    #[arg(long = "json")]
+    pub json: bool,
+
+    /// Prioritize HTTP/2 multiplexing protocol
+    #[arg(long = "http2")]
+    pub http2: bool,
+
+    /// Custom path for .rcurlrc configuration file
+    #[arg(long = "config", value_name = "PATH")]
+    pub config_path: Option<PathBuf>,
+}
+
+pub fn parse_rate_limit(s: &str) -> Option<u64> {
+    let s = s.trim().to_uppercase();
+    if s.ends_with('K') {
+        s[..s.len() - 1].parse::<u64>().ok().map(|n| n * 1_024)
+    } else if s.ends_with('M') {
+        s[..s.len() - 1].parse::<u64>().ok().map(|n| n * 1_048_576)
+    } else if s.ends_with('G') {
+        s[..s.len() - 1].parse::<u64>().ok().map(|n| n * 1_073_741_824)
+    } else {
+        s.parse::<u64>().ok()
+    }
 }
