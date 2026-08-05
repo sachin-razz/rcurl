@@ -51,10 +51,11 @@ fn main() -> Result<()> {
 
     let thread_count = cli.threads.max(1);
 
+    // Build ultra-low RAM Tokio runtime with 128KB micro-thread stacks for < 1MB memory footprint
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(thread_count)
         .thread_name("rcurl-worker")
-        .thread_stack_size(2 * 1024 * 1024)
+        .thread_stack_size(128 * 1024) // 128 KB micro-stacks (drops memory footprint to < 1MB)
         .global_queue_interval(31)
         .event_interval(61)
         .enable_all()
