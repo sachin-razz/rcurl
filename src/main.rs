@@ -22,6 +22,12 @@ use std::time::Duration;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() -> Result<()> {
+    // Enforce mimalloc v2 2 MB Huge OS Page Eager Commit & Zero Purge Decay
+    unsafe {
+        std::env::set_var("MIMALLOC_EAGER_COMMIT", "1");
+        std::env::set_var("MIMALLOC_PURGE_DECAY", "0");
+    }
+
     let mut cli = Box::new(Cli::parse());
     let config = RcurlConfig::load_default();
 

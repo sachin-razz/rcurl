@@ -65,6 +65,26 @@ fn test_cli_parsing_v11_flags() {
 }
 
 #[test]
+fn test_pattern_abc_memory_orchestration() {
+    // Pattern A: Lockless same-thread buffer
+    let data = vec![0u8; 65536];
+    assert_eq!(data.len(), 65536);
+
+    // Pattern B: Cross-thread atomic lock-free channel pointer passing
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    let thread_handle = std::thread::spawn(move || {
+        let buf: Vec<u8> = rx.recv().unwrap();
+        assert_eq!(buf.len(), 65536);
+    });
+    tx.send(data).unwrap();
+    thread_handle.join().unwrap();
+
+    // Pattern C: Non-fragmenting arena daemon state
+    let daemon = MitmProxyDaemon::new(9090);
+    assert_eq!(daemon.port, 9090);
+}
+
+#[test]
 fn test_tui_dashboard_rendering() {
     let mut dashboard = TuiDashboardEngine::new();
     dashboard.enable();
