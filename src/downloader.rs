@@ -16,6 +16,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::fs::{self, File, OpenOptions};
 use tokio::io::{self, AsyncWriteExt};
+#[cfg(not(unix))]
+use tokio::io::AsyncSeekExt;
 use tokio::sync::Semaphore;
 
 pub struct CurlEngine {
