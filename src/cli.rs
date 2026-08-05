@@ -553,6 +553,14 @@ pub struct Cli {
     #[arg(long = "encrypt-password", value_name = "PASSWORD")]
     pub encrypt_password: Option<String>,
 
+    /// Combine all Next-Gen CDC & AI Compression Engines (UltraCDC + TurboQuant + MCTS + SubQ + PolarQuant)
+    #[arg(long = "ultraheavy", alias = "ultra-heavy", alias = "max-speed")]
+    pub ultraheavy: bool,
+
+    /// Disable Ultraheavy engine and force standard 16-thread HTTP Range streaming
+    #[arg(long = "no-ultraheavy", alias = "standard")]
+    pub no_ultraheavy: bool,
+
     /// Enable embedded Transfer.sh Server Daemon
     #[arg(long = "transfer-server")]
     pub transfer_server: bool,

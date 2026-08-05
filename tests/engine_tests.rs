@@ -39,7 +39,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--gdrive-upload", "--resumable", "--max-days=7", "--max-downloads=5", "--encrypt-password=secret", "--transfer-server", "--adler-md5"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--gdrive-upload", "--resumable", "--max-days=7", "--max-downloads=5", "--encrypt-password=secret", "--ultraheavy", "--transfer-server", "--adler-md5"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -70,8 +70,20 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert_eq!(cli.max_days, Some(7));
     assert_eq!(cli.max_downloads, Some(5));
     assert_eq!(cli.encrypt_password, Some("secret".to_string()));
+    assert!(cli.ultraheavy);
     assert!(cli.transfer_server);
     assert!(cli.adler_md5);
+}
+
+#[test]
+fn test_ultraheavy_master_engine_flag() {
+    let args = vec!["rcurl", "https://httpbin.org/get", "--ultraheavy"];
+    let cli = Cli::try_parse_from(args).unwrap();
+    assert!(cli.ultraheavy);
+
+    let args_no = vec!["rcurl", "https://httpbin.org/get", "--no-ultraheavy"];
+    let cli_no = Cli::try_parse_from(args_no).unwrap();
+    assert!(cli_no.no_ultraheavy);
 }
 
 #[test]
