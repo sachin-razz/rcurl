@@ -66,12 +66,13 @@ fn main() -> Result<()> {
         }
     }
 
-    let thread_count = cli.threads.max(1);
+    let stack_size = if cli.micro_ram { 32 * 1024 } else { 128 * 1024 };
+    let thread_count = if cli.micro_ram { 1 } else { cli.threads.max(1) };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(thread_count)
         .thread_name("rcurl-worker")
-        .thread_stack_size(128 * 1024)
+        .thread_stack_size(stack_size)
         .global_queue_interval(31)
         .event_interval(61)
         .enable_all()
