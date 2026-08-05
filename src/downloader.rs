@@ -27,7 +27,7 @@ pub struct CurlEngine {
 impl CurlEngine {
     pub fn new(cli: &Cli) -> Result<Self> {
         let mut builder = Client::builder()
-            .pool_max_idle_per_host(cli.threads.max(cli.parallel_max))
+            .pool_max_idle_per_host(if cli.micro_ram { 1 } else { cli.threads.max(cli.parallel_max) })
             .pool_idle_timeout(Duration::from_secs(90))
             .tcp_nodelay(true)
             .tcp_keepalive(Duration::from_secs(60));

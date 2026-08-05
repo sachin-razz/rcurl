@@ -51,7 +51,7 @@ fn test_cli_parsing_curl_flags() {
 fn test_cli_parsing_v11_flags() {
     let args = vec![
         "rcurl", "s3://my-bucket/file.iso",
-        "--tui", "--tor", "--i2p", "--multicast-send=239.255.0.1:9999", "--multicast-listen=239.255.0.1:9999", "--omni-multicast", "--mitm-proxy"
+        "--tui", "--tor", "--i2p", "--multicast-send=239.255.0.1:9999", "--multicast-listen=239.255.0.1:9999", "--omni-multicast", "--mitm-proxy", "--micro-ram"
     ];
     let cli = Box::new(Cli::try_parse_from(args).unwrap());
     assert!(cli.tui);
@@ -61,6 +61,7 @@ fn test_cli_parsing_v11_flags() {
     assert_eq!(cli.multicast_listen, Some("239.255.0.1:9999".to_string()));
     assert!(cli.omni_multicast);
     assert!(cli.mitm_proxy);
+    assert!(cli.micro_ram);
 }
 
 #[test]

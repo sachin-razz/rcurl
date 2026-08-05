@@ -637,6 +637,10 @@ pub struct Cli {
     #[arg(long = "mitm-proxy")]
     pub mitm_proxy: bool,
 
+    /// Force Sub-Megabyte (< 1 MB) Micro-RAM Engine Mode
+    #[arg(long = "micro-ram", alias = "minimal-ram")]
+    pub micro_ram: bool,
+
     /// Enable embedded Transfer.sh Server Daemon
     #[arg(long = "transfer-server")]
     pub transfer_server: bool,
