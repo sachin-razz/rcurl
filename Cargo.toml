@@ -1,17 +1,18 @@
 [package]
 name = "rcurl"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2021"
 authors = ["Sachin Rajpurohit"]
-description = "Brutally Optimized 16-Thread Tokio Parallel Streaming CLI HTTP Client"
+description = "16-Thread Tokio Streaming CLI + Native C libcurl Engine (100% Full Curl Parity)"
 readme = "README.md"
 license = "MIT"
-keywords = ["cli", "curl", "tokio", "mimalloc", "http2"]
+keywords = ["cli", "curl", "libcurl", "tokio", "mimalloc"]
 categories = ["command-line-utilities", "asynchronous"]
 
 [dependencies]
 tokio = { version = "1.43", features = ["full"] }
 reqwest = { version = "0.12", default-features = false, features = ["stream", "json", "rustls-tls", "socks", "http2"] }
+curl = "0.4"
 futures-util = "0.3"
 clap = { version = "4.5", features = ["derive", "env"] }
 serde = { version = "1.0", features = ["derive"] }

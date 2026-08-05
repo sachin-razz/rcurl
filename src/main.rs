@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod downloader;
+mod libcurl_engine;
 mod progress;
 mod telemetry;
 
@@ -50,7 +51,6 @@ fn main() -> Result<()> {
 
     let thread_count = cli.threads.max(1);
 
-    // Build brutally optimized Tokio multi-threaded runtime with tuned work-stealing scheduler
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(thread_count)
         .thread_name("rcurl-worker")
