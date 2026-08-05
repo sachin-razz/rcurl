@@ -1,0 +1,23 @@
+name: rcurl
+base: core22
+version: '11.7.0'
+summary: 16-Thread Tokio Streaming CLI Downloader
+description: |
+  Ultra-fast 16-thread streaming CLI downloader with BitTorrent P2P,
+  WebDrive, gRPC, Zstd Dict, eBPF XDP, and TUI Dashboard.
+
+grade: stable
+confinement: strict
+
+apps:
+  rcurl:
+    command: bin/rcurl
+    plugs:
+      - network
+      - network-bind
+      - home
+
+parts:
+  rcurl:
+    plugin: rust
+    source: .

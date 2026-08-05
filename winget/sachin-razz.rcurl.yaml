@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.6.0.schema.json
+PackageIdentifier: sachin-razz.rcurl
+PackageVersion: 11.7.0
+DefaultLocale: en-US
+Publisher: Sachin Rajpurohit
+PublisherUrl: https://github.com/sachin-razz
+Author: Sachin Rajpurohit
+PackageName: rcurl
+PackageUrl: https://github.com/sachin-razz/rcurl
+License: MIT
+LicenseUrl: https://github.com/sachin-razz/rcurl/blob/master/LICENSE
+ShortDescription: 16-Thread Tokio Streaming CLI Downloader
+Description: Ultra-fast 16-thread streaming CLI downloader with BitTorrent P2P, WebDrive, gRPC, Zstd Dict, eBPF XDP, and TUI Dashboard.
+Moniker: rcurl
+Tags:
+  - curl
+  - downloader
+  - streaming
+  - p2p
+  - bittorrent
+  - tokio
+  - rust
+Installers:
+  - Architecture: x64
+    InstallerType: zip
+    NestedInstallerType: portable
+    NestedInstallerFiles:
+      - RelativeFilePath: rcurl.exe
+        PortableCommandAlias: rcurl
+    InstallerUrl: https://github.com/sachin-razz/rcurl/releases/latest/download/rcurl-windows-x86_64.zip
+    InstallerSha256: 0000000000000000000000000000000000000000000000000000000000000000
+ManifestType: version
+ManifestVersion: 1.6.0

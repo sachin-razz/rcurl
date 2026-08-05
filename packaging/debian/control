@@ -1,0 +1,14 @@
+Source: rcurl
+Section: utils
+Priority: optional
+Maintainer: Sachin Rajpurohit <sachin-razz>
+Build-Depends: debhelper-compat (= 13), rustc, cargo
+Standards-Version: 4.6.2
+Homepage: https://github.com/sachin-razz/rcurl
+
+Package: rcurl
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: 16-Thread Tokio Streaming CLI Downloader (Pure Rust Native Engine)
+ Ultra-fast 16-thread streaming CLI downloader with BitTorrent P2P,
+ WebDrive, gRPC, Zstd Dict, eBPF XDP, and TUI Dashboard.

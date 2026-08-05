@@ -1,0 +1,19 @@
+# Maintainer: Sachin Rajpurohit <sachin-razz>
+pkgname=rcurl
+pkgver=11.7.0
+pkgrel=0
+pkgdesc="16-Thread Tokio Streaming CLI Downloader"
+url="https://github.com/sachin-razz/rcurl"
+arch="all"
+license="MIT"
+makedepends="cargo rust"
+source="rcurl-$pkgver.tar.gz::https://github.com/sachin-razz/rcurl/archive/v$pkgver.tar.gz"
+builddir="$srcdir/rcurl-$pkgver"
+
+build() {
+    cargo build --release
+}
+
+package() {
+    install -Dm755 target/release/rcurl "$pkgdir"/usr/bin/rcurl
+}
