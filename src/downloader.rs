@@ -93,7 +93,11 @@ impl CurlEngine {
 
         loop {
             attempts += 1;
-            match self.fetch_stream(url, cli).await {
+            // Boxed so this deeply-nested future's state lives on the heap instead of
+            // being inlined into execute_request's own state machine across the retry
+            // loop (unoptimized/debug builds otherwise compound frame sizes enough to
+            // overflow the default thread stack — see `fetch_stream` for the same fix).
+            match Box::pin(self.fetch_stream(url, cli)).await {
                 Ok(()) => return Ok(()),
                 Err(err) => {
                     if attempts > max_retries {
@@ -151,17 +155,19 @@ impl CurlEngine {
             None
         };
 
-        let probe_res = self.probe_server(url, cli).await;
+        let probe_res = Box::pin(self.probe_server(url, cli)).await;
 
         if let (Some(path), Ok((content_length, supports_ranges))) = (target_file.clone(), probe_res) {
             if supports_ranges && content_length > 1_000_000 && cli.threads > 1 && method == "GET" && cli.data.is_none() && cli.data_raw.is_none() && cli.json_payload.is_none() {
-                return self
-                    .download_parallel_16_thread(url, &path, content_length, cli, start_time)
+                // Box: these two branches are large async fns (many locals live across
+                // many .await points). Boxing keeps fetch_stream's own future small and
+                // avoids stack-overflowing the default 2MB thread stack in debug builds.
+                return Box::pin(self.download_parallel_16_thread(url, &path, content_length, cli, start_time))
                     .await;
             }
         }
 
-        self.download_single_stream(url, target_file, cli, start_time).await
+        Box::pin(self.download_single_stream(url, target_file, cli, start_time)).await
     }
 
     async fn probe_server(&self, url: &str, cli: &Cli) -> Result<(u64, bool)> {
