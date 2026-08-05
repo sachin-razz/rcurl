@@ -28,13 +28,14 @@ impl CurlEngine {
     pub fn new(cli: &Cli) -> Result<Self> {
         let mut builder = Client::builder()
             .pool_max_idle_per_host(cli.threads)
-            .tcp_keepalive(Duration::from_secs(30));
+            .pool_idle_timeout(Duration::from_secs(90))
+            .tcp_nodelay(true)
+            .tcp_keepalive(Duration::from_secs(60));
 
         if cli.http2 {
             builder = builder.http2_prior_knowledge();
         }
 
-        // Configure SOCKS5 / HTTP / HTTPS Proxy if specified
         if let Some(ref proxy_url) = cli.proxy {
             let proxy = Proxy::all(proxy_url)
                 .with_context(|| format!("Failed to configure proxy {}", proxy_url))?;
@@ -44,7 +45,7 @@ impl CurlEngine {
         if let Some(ref ua) = cli.user_agent {
             builder = builder.user_agent(ua);
         } else {
-            builder = builder.user_agent("rcurl/0.2.0 (16-Thread Tokio Stream Engine)");
+            builder = builder.user_agent("rcurl/0.4.0 (Brutally Optimized 16-Thread Tokio Stream Engine)");
         }
 
         if let Some(timeout_secs) = cli.timeout {
@@ -110,7 +111,6 @@ impl CurlEngine {
             None
         };
 
-        // Probe HTTP server for Content-Length and Accept-Ranges
         let probe_res = self.probe_server(url, cli).await;
 
         if let (Some(path), Ok((content_length, supports_ranges))) = (target_file.clone(), probe_res) {
@@ -121,7 +121,6 @@ impl CurlEngine {
             }
         }
 
-        // Standard Single-Stream Fallback (or stdout)
         self.download_single_stream(url, target_file, cli, start_time).await
     }
 
@@ -158,7 +157,6 @@ impl CurlEngine {
         Ok((length, accepts_ranges))
     }
 
-    /// 16-Thread Parallel Range Chunk Streaming Engine with offset writing & rate throttling
     async fn download_parallel_16_thread(
         &self,
         url: &str,
@@ -179,7 +177,7 @@ impl CurlEngine {
             );
             println!(
                 "🚀 {} {}",
-                "rcurl 16-Thread Parallel Stream Downloader".bold().green(),
+                "rcurl Brutally Optimized 16-Thread Stream Engine".bold().green(),
                 format!("({} MB)", total_size / 1_048_576).yellow()
             );
             println!(
@@ -191,9 +189,7 @@ impl CurlEngine {
             println!("{} File Destination : {}", "[LOG]".bold().magenta(), path.display().to_string().cyan());
             println!("{} Total Size       : {} bytes", "[LOG]".bold().magenta(), total_size.to_string().bold());
             println!("{} Worker Threads   : {}", "[LOG]".bold().magenta(), num_threads.to_string().bold().yellow());
-            if let Some(ref limit) = cli.rate_limit {
-                println!("{} Rate Limiter    : {}/s", "[LOG]".bold().magenta(), limit.bold().green());
-            }
+            println!("{} Memory Allocator : mimalloc (Zero-Allocation Loop)", "[LOG]".bold().magenta());
         }
 
         if let Some(parent) = path.parent() {
@@ -273,7 +269,6 @@ impl CurlEngine {
                         offset += len;
                         bytes_downloaded_worker += len;
 
-                        // Rate limiting throttling
                         if let Some(max_bps) = rate_limit_bytes_per_sec {
                             let worker_max_bps = max_bps / num_threads as u64;
                             if worker_max_bps > 0 {
@@ -334,7 +329,6 @@ impl CurlEngine {
         let elapsed = start_time.elapsed().as_secs_f64();
         let speed_mbps = (total_size as f64 / 1_048_576.0) / elapsed.max(0.001);
 
-        // Perform Hash Verification if requested
         let (sha256_res, md5_res, comp_sha, comp_md5) = Self::verify_file_hashes(path, cli).await?;
 
         if cli.json {
@@ -355,7 +349,7 @@ impl CurlEngine {
         } else if !cli.silent {
             println!(
                 "\n{} Downloaded {} across {} Tokio streams in {:.2}s ({:.2} MB/s)",
-                "✔ PARALLEL STREAM COMPLETE:".bold().green(),
+                "✔ BRUTAL STREAM COMPLETE:".bold().green(),
                 path.display().to_string().cyan(),
                 num_threads.to_string().yellow(),
                 elapsed,
@@ -366,7 +360,6 @@ impl CurlEngine {
         Ok(())
     }
 
-    /// Single stream fallback with on-the-fly hashing & rate throttling
     async fn download_single_stream(
         &self,
         url: &str,
