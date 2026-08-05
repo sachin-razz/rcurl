@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod downloader;
 mod libcurl_engine;
+mod modules;
 mod pure_rust_engine;
 mod progress;
 mod telemetry;
