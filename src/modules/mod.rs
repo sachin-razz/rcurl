@@ -17,4 +17,8 @@ pub mod smtp;
 pub mod socks;
 pub mod telnet;
 pub mod tftp;
+pub mod vauth;
+pub mod vdns;
+pub mod vquic;
+pub mod vssh;
 pub mod ws;
