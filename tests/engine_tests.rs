@@ -7,6 +7,7 @@ use rcurl::modules::ftp::FtpProtocolEngine;
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
 use rcurl::modules::mcts_quant::{MctsChunkRouter, TurboQuantEngine};
+use rcurl::modules::polar_subq::{PolarQuantEngine, SubQEngine};
 use rcurl::modules::rrsync::RrsyncEngine;
 use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
 use rcurl::modules::rsyncd_config::RsyncdConfig;
@@ -36,7 +37,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--adler-md5"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--adler-md5"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -60,7 +61,22 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.ultracdc);
     assert!(cli.turboquant);
     assert!(cli.mcts_router);
+    assert!(cli.subq);
+    assert!(cli.polarquant);
     assert!(cli.adler_md5);
+}
+
+#[test]
+fn test_subq_and_polarquant_engines() {
+    let subq = SubQEngine::new(4);
+    let sq = subq.quantize(b"Sub-Vector Quantization Test Payload");
+    assert_eq!(sq.sub_vector_dim, 4);
+    assert!(!sq.quantized_codes.is_empty());
+
+    let pq = PolarQuantEngine::new(256);
+    let polar = pq.quantize(b"Polar Coordinate Quantization Test Payload").unwrap();
+    assert!(polar.magnitude > 0.0);
+    assert!(!polar.quantized_angles.is_empty());
 }
 
 #[test]
@@ -79,7 +95,7 @@ fn test_mcts_chunk_router_uct() {
 
     let routes = vec!["route_a".to_string(), "route_b".to_string()];
     let chosen = router.select_best_route(&routes).unwrap();
-    assert_eq!(chosen, "route_b"); // Route B is unvisited -> UCT gives infinite priority to explore
+    assert_eq!(chosen, "route_b");
 }
 
 #[test]

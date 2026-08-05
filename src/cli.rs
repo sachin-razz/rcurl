@@ -525,6 +525,14 @@ pub struct Cli {
     #[arg(long = "mcts-router")]
     pub mcts_router: bool,
 
+    /// Enable SubQ (Sub-Vector Quantization) Delta Compression Engine
+    #[arg(long = "subq")]
+    pub subq: bool,
+
+    /// Enable PolarQuant (Polar Coordinate Angle-Magnitude Quantization) Engine
+    #[arg(long = "polarquant")]
+    pub polarquant: bool,
+
     /// Force classic Adler-32 & MD5 Delta Engine algorithm
     #[arg(long = "adler-md5", alias = "adler32-md5")]
     pub adler_md5: bool,

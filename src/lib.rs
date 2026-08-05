@@ -1,4 +1,4 @@
-//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC, TurboQuant, MCTS Router).
+//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC, TurboQuant, MCTS Router, SubQ, PolarQuant).
 //!
 //! # Example Doc-Tests
 //! ```rust
@@ -48,7 +48,18 @@
 //! let mut router = MctsChunkRouter::new();
 //! router.update_route("wifi-5ghz", 0.95);
 //! let best = router.select_best_route(&["wifi-5ghz".to_string(), "5g-cellular".to_string()]).unwrap();
-//! assert_eq!(best, "5g-cellular"); // Unvisited 5G prioritized for exploration
+//! assert_eq!(best, "5g-cellular");
+//! ```
+//!
+//! ```rust
+//! use rcurl::modules::polar_subq::{SubQEngine, PolarQuantEngine};
+//! let subq = SubQEngine::new(4);
+//! let sq = subq.quantize(b"SubQ Vector Payload Test");
+//! assert_eq!(sq.sub_vector_dim, 4);
+//!
+//! let pq = PolarQuantEngine::new(256);
+//! let polar_chunk = pq.quantize(b"PolarQuant Test Payload").unwrap();
+//! assert!(polar_chunk.magnitude > 0.0);
 //! ```
 
 pub mod cli;
