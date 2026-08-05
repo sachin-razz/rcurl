@@ -297,8 +297,8 @@ pub struct Cli {
     #[arg(long = "ca-directory", value_name = "DIR")]
     pub ca_directory: Option<PathBuf>,
 
-    /// Enable recursive web crawling & downloading (Wget --recursive)
-    #[arg(long = "recursive")]
+    /// Enable recursive web crawling & downloading (Wget -r / --recursive)
+    #[arg(short = 'r', long = "recursive")]
     pub recursive: bool,
 
     /// Maximum recursion depth level for web crawling (Wget -l / --level)
@@ -317,8 +317,8 @@ pub struct Cli {
     #[arg(long = "backup-converted")]
     pub backup_converted: bool,
 
-    /// Mirror website recursively with timestamping (Wget --mirror)
-    #[arg(long = "mirror")]
+    /// Mirror website recursively with timestamping (Wget -m / --mirror)
+    #[arg(long = "mirror", alias = "m")]
     pub mirror: bool,
 
     /// Download all page requisites (CSS, JS, images) for offline viewing (Wget -p)
@@ -666,7 +666,7 @@ pub struct Cli {
     pub exclude_directories: Option<String>,
 
     /// Do not ascend to parent directory (Wget -np / --no-parent)
-    #[arg(long = "no-parent")]
+    #[arg(long = "no-parent", alias = "np")]
     pub no_parent: bool,
 
     /// Write response output to target file instead of stdout
@@ -817,8 +817,8 @@ pub struct Cli {
     #[arg(short = 'C', long = "continue-at", value_name = "OFFSET")]
     pub continue_at: Option<String>,
 
-    /// Request byte range (e.g. -r 0-1024)
-    #[arg(short = 'r', long = "range", value_name = "RANGE")]
+    /// Request byte range (e.g. --range 0-1024)
+    #[arg(long = "range", value_name = "RANGE")]
     pub byte_range: Option<String>,
 
     /// Specify User-Agent header string
