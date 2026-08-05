@@ -33,6 +33,8 @@ It acts as a drop-in replacement for both **`curl`** and **`wget`**!
 
 ## 📦 1-Step Installation Matrix (All Package Managers)
 
+For full details, Linux GNU package specs, and architectural installation docs, see [**docs/INSTALLATION.md**](file:///Users/sachinrajpurohit/Developer/sandbox/wifipasswordcracker/rcurl/docs/INSTALLATION.md).
+
 | OS / Platform | Package Manager | 1-Step Install Command |
 | :--- | :--- | :--- |
 | **macOS & Linux** | **Homebrew** | `brew install sachin-razz/tap/rcurl` |
