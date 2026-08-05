@@ -1,7 +1,7 @@
 [package]
 name = "rcurl"
 version = "2.0.1"
-edition = "2021"
+edition = "2024"
 authors = ["Sachin Rajpurohit"]
 description = "16-Thread Tokio Async Streaming CLI HTTP Client (Full Curl Feature Parity)"
 readme = "README.md"
