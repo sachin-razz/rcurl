@@ -1,4 +1,4 @@
-//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC, TurboQuant, MCTS Router, SubQ, PolarQuant).
+//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC, TurboQuant, MCTS Router, SubQ, PolarQuant, WebDrive).
 //!
 //! # Example Doc-Tests
 //! ```rust
@@ -60,6 +60,17 @@
 //! let pq = PolarQuantEngine::new(256);
 //! let polar_chunk = pq.quantize(b"PolarQuant Test Payload").unwrap();
 //! assert!(polar_chunk.magnitude > 0.0);
+//! ```
+//!
+//! ```rust
+//! use rcurl::modules::webdrive::{GoogleDriveResumableUpload, WebDriveEngine};
+//! let gdrive = GoogleDriveResumableUpload::new("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=123", 1048576);
+//! let range = gdrive.format_chunk_range_header(0, 524287);
+//! assert_eq!(range, "bytes 0-524287/1048576");
+//!
+//! let engine = WebDriveEngine::default();
+//! let anon_url = engine.build_anonymous_upload_endpoint("transfer", "data.zip").unwrap();
+//! assert_eq!(anon_url, "https://transfer.sh/data.zip");
 //! ```
 
 pub mod cli;

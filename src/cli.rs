@@ -533,6 +533,14 @@ pub struct Cli {
     #[arg(long = "polarquant")]
     pub polarquant: bool,
 
+    /// Enable Google Drive Resumable API-keyless upload engine
+    #[arg(long = "gdrive-upload")]
+    pub gdrive_upload: bool,
+
+    /// Force Resumable Chunked Upload Protocol
+    #[arg(long = "resumable")]
+    pub resumable: bool,
+
     /// Force classic Adler-32 & MD5 Delta Engine algorithm
     #[arg(long = "adler-md5", alias = "adler32-md5")]
     pub adler_md5: bool,

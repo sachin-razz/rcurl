@@ -21,6 +21,7 @@ use rcurl::modules::vdns::cares::CaresDnsEngine;
 use rcurl::modules::vdns::dns::DnsEngine;
 use rcurl::modules::vquic::quic::QuicTransportEngine;
 use rcurl::modules::vssh::ssh::SshEngine;
+use rcurl::modules::webdrive::{GoogleDriveResumableUpload, WebDriveEngine};
 use rcurl::modules::ws::WebSocketEngine;
 use clap::Parser;
 
@@ -37,7 +38,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--adler-md5"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--ultracdc", "--turboquant", "--mcts-router", "--subq", "--polarquant", "--gdrive-upload", "--resumable", "--adler-md5"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -63,7 +64,29 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.mcts_router);
     assert!(cli.subq);
     assert!(cli.polarquant);
+    assert!(cli.gdrive_upload);
+    assert!(cli.resumable);
     assert!(cli.adler_md5);
+}
+
+#[test]
+fn test_gdrive_resumable_upload_headers_and_range() {
+    let headers = GoogleDriveResumableUpload::build_initiation_headers("sample.iso", "application/x-iso9660-image", "ya29.test_token");
+    assert!(headers.contains_key("authorization"));
+    assert!(headers.contains_key("x-upload-content-type"));
+
+    let upload = GoogleDriveResumableUpload::new("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=test", 2097152);
+    let range = upload.format_chunk_range_header(0, 1048575);
+    assert_eq!(range, "bytes 0-1048575/2097152");
+}
+
+#[test]
+fn test_webdrive_engine_endpoints() {
+    let engine = WebDriveEngine::new(Some("token123".to_string()), None);
+    assert_eq!(engine.build_gdrive_upload_endpoint(), "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable");
+
+    let transfer_url = engine.build_anonymous_upload_endpoint("transfer", "backup.zip").unwrap();
+    assert_eq!(transfer_url, "https://transfer.sh/backup.zip");
 }
 
 #[test]

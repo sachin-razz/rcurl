@@ -28,4 +28,5 @@ pub mod vauth;
 pub mod vdns;
 pub mod vquic;
 pub mod vssh;
+pub mod webdrive;
 pub mod ws;
