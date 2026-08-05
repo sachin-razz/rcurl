@@ -65,6 +65,22 @@ fn test_cli_parsing_v11_flags() {
 }
 
 #[test]
+fn test_wget_bundled_short_flags() {
+    let args = vec![
+        "rcurl", "-r", "-m", "-p", "-E", "-k", "--no-parent",
+        "--user-agent=Mozilla/5.0",
+        "https://ld-wt73.template-help.com/tf/meetic_v1/"
+    ];
+    let cli = Box::new(Cli::try_parse_from(args).unwrap());
+    assert!(cli.recursive);
+    assert!(cli.mirror);
+    assert!(cli.page_requisites);
+    assert!(cli.html_extension);
+    assert!(cli.insecure);
+    assert!(cli.no_parent);
+}
+
+#[test]
 fn test_pattern_abc_memory_orchestration() {
     use rcurl::modules::memory_patterns::{PatternAMemoryEngine, PatternBMemoryEngine, PatternCMemoryEngine};
 

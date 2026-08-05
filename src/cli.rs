@@ -194,7 +194,7 @@ pub struct Cli {
     pub directory_prefix: Option<PathBuf>,
 
     /// Append .html extension to HTML responses (Wget -E / --html-extension / --adjust-extension)
-    #[arg(short = 'E', long = "html-extension", alias = "adjust-extension")]
+    #[arg(short = 'E', long = "html-extension", alias = "adjust-extension", action = clap::ArgAction::SetTrue)]
     pub html_extension: bool,
 
     /// HTTP username (Wget --http-user)
@@ -298,7 +298,7 @@ pub struct Cli {
     pub ca_directory: Option<PathBuf>,
 
     /// Enable recursive web crawling & downloading (Wget -r / --recursive)
-    #[arg(short = 'r', long = "recursive")]
+    #[arg(short = 'r', long = "recursive", action = clap::ArgAction::SetTrue)]
     pub recursive: bool,
 
     /// Maximum recursion depth level for web crawling (Wget -l / --level)
@@ -306,23 +306,23 @@ pub struct Cli {
     pub level: usize,
 
     /// Delete downloaded files after retrieval (Wget --delete-after)
-    #[arg(long = "delete-after")]
+    #[arg(long = "delete-after", action = clap::ArgAction::SetTrue)]
     pub delete_after: bool,
 
     /// Convert links for local offline viewing (Wget -k / --convert-links)
-    #[arg(long = "convert-links")]
+    #[arg(long = "convert-links", action = clap::ArgAction::SetTrue)]
     pub convert_links: bool,
 
     /// Backup original files with .orig suffix before converting (Wget -K / --backup-converted)
-    #[arg(long = "backup-converted")]
+    #[arg(long = "backup-converted", action = clap::ArgAction::SetTrue)]
     pub backup_converted: bool,
 
     /// Mirror website recursively with timestamping (Wget -m / --mirror)
-    #[arg(short = 'm', long = "mirror")]
+    #[arg(short = 'm', long = "mirror", action = clap::ArgAction::SetTrue)]
     pub mirror: bool,
 
     /// Download all page requisites (CSS, JS, images) for offline viewing (Wget -p)
-    #[arg(short = 'p', long = "page-requisites")]
+    #[arg(short = 'p', long = "page-requisites", action = clap::ArgAction::SetTrue, overrides_with = "page_requisites")]
     pub page_requisites: bool,
 
     /// Strict SGML HTML comment parsing (Wget --strict-comments)
@@ -666,7 +666,7 @@ pub struct Cli {
     pub exclude_directories: Option<String>,
 
     /// Do not ascend to parent directory (Wget -np / --no-parent)
-    #[arg(long = "no-parent", alias = "np")]
+    #[arg(long = "no-parent", alias = "np", action = clap::ArgAction::SetTrue)]
     pub no_parent: bool,
 
     /// Write response output to target file instead of stdout
@@ -734,7 +734,7 @@ pub struct Cli {
     pub compressed: bool,
 
     /// Allow insecure SSL/TLS connections (skip certificate verification)
-    #[arg(short = 'k', long = "insecure")]
+    #[arg(short = 'k', long = "insecure", action = clap::ArgAction::SetTrue)]
     pub insecure: bool,
 
     /// Specify CA certificate file to verify peer
