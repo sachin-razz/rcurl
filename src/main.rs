@@ -12,6 +12,7 @@ use config::RcurlConfig;
 use colored::Colorize;
 use downloader::CurlEngine;
 use mimalloc::MiMalloc;
+use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -49,13 +50,26 @@ fn main() -> Result<()> {
         }
     }
 
+    // Process Wget -i / --input-file if provided
+    if let Some(ref input_file_path) = cli.input_file {
+        if let Ok(content) = fs::read_to_string(input_file_path) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if !trimmed.is_empty() && !trimmed.starts_with('#') {
+                    if !cli.urls.contains(&trimmed.to_string()) {
+                        cli.urls.push(trimmed.to_string());
+                    }
+                }
+            }
+        }
+    }
+
     let thread_count = cli.threads.max(1);
 
-    // Build ultra-low RAM Tokio runtime with 128KB micro-thread stacks for < 1MB memory footprint
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(thread_count)
         .thread_name("rcurl-worker")
-        .thread_stack_size(128 * 1024) // 128 KB micro-stacks (drops memory footprint to < 1MB)
+        .thread_stack_size(128 * 1024)
         .global_queue_interval(31)
         .event_interval(61)
         .enable_all()

@@ -1,9 +1,9 @@
 [package]
 name = "rcurl"
-version = "2.0.1"
+version = "3.0.0"
 edition = "2024"
 authors = ["Sachin Rajpurohit"]
-description = "16-Thread Tokio Async Streaming CLI HTTP Client (Full Curl Feature Parity)"
+description = "16-Thread Tokio Streaming CLI Downloader (Full Curl + Full Wget Feature Matrix)"
 readme = "README.md"
 license = "MIT"
 keywords = ["cli", "curl", "streaming", "tokio", "http2"]

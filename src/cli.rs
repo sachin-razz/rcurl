@@ -5,13 +5,61 @@ use std::path::PathBuf;
 #[command(
     name = "rcurl",
     author = "Sachin Rajpurohit",
-    version = "1.0.0",
-    about = "16-Thread Tokio Parallel Streaming CLI HTTP Client (Full 250+ Curl Flag Compatible Matrix)"
+    version = "3.0.0",
+    about = "16-Thread Tokio Streaming CLI Downloader (Full Curl + Full Wget Matrix)"
 )]
 pub struct Cli {
     /// URL(s) to fetch / download
     #[arg(value_name = "URL")]
     pub urls: Vec<String>,
+
+    /// Read URLs from a local input text file (Wget -i / --input-file)
+    #[arg(short = 'i', long = "input-file", value_name = "FILE")]
+    pub input_file: Option<PathBuf>,
+
+    /// Enable recursive web crawling & downloading (Wget -r / --recursive)
+    #[arg(short = 'r', long = "recursive")]
+    pub recursive: bool,
+
+    /// Maximum recursion depth level for web crawling (Wget -l / --level)
+    #[arg(short = 'l', long = "level", default_value_t = 5, value_name = "NUMBER")]
+    pub level: usize,
+
+    /// Mirror website recursively with timestamping (Wget -m / --mirror)
+    #[arg(short = 'm', long = "mirror")]
+    pub mirror: bool,
+
+    /// Download all page requisites (CSS, JS, images) for offline viewing (Wget -p)
+    #[arg(short = 'p', long = "page-requisites")]
+    pub page_requisites: bool,
+
+    /// Convert HTML links for local offline browsing (Wget -k / --convert-links)
+    #[arg(long = "convert-links")]
+    pub convert_links: bool,
+
+    /// Comma-separated list of accepted file extensions (Wget -A / --accept)
+    #[arg(short = 'A', long = "accept", value_name = "LIST")]
+    pub accept: Option<String>,
+
+    /// Comma-separated list of rejected file extensions (Wget -R / --reject)
+    #[arg(short = 'R', long = "reject", value_name = "LIST")]
+    pub reject: Option<String>,
+
+    /// Directory prefix for output files (Wget -P / --directory-prefix)
+    #[arg(short = 'P', long = "directory-prefix", value_name = "DIR")]
+    pub directory_prefix: Option<PathBuf>,
+
+    /// Only retrieve files newer than local versions (Wget -N / --timestamping)
+    #[arg(long = "timestamping")]
+    pub timestamping: bool,
+
+    /// Don't create directory hierarchy (Wget -nd / --no-directories)
+    #[arg(long = "no-directories")]
+    pub no_directories: bool,
+
+    /// Force remote directory hierarchy creation locally (Wget -x / --force-directories)
+    #[arg(long = "force-directories")]
+    pub force_directories: bool,
 
     /// Write response output to target file instead of stdout
     #[arg(short = 'o', long = "output", value_name = "FILE")]
