@@ -5,7 +5,7 @@ use std::path::PathBuf;
 #[command(
     name = "rcurl",
     author = "Sachin Rajpurohit",
-    version = "4.0.0",
+    version = env!("CARGO_PKG_VERSION"),
     about = "16-Thread Tokio Streaming CLI Downloader (100% Full Wget + Full Curl Feature Matrix)"
 )]
 pub struct Cli {
@@ -193,8 +193,8 @@ pub struct Cli {
     #[arg(short = 'P', long = "directory-prefix", value_name = "DIR")]
     pub directory_prefix: Option<PathBuf>,
 
-    /// Append .html extension to HTML responses (Wget -E / --html-extension)
-    #[arg(long = "html-extension")]
+    /// Append .html extension to HTML responses (Wget -E / --html-extension / --adjust-extension)
+    #[arg(short = 'E', long = "html-extension", alias = "adjust-extension")]
     pub html_extension: bool,
 
     /// HTTP username (Wget --http-user)
@@ -318,7 +318,7 @@ pub struct Cli {
     pub backup_converted: bool,
 
     /// Mirror website recursively with timestamping (Wget -m / --mirror)
-    #[arg(long = "mirror", alias = "m")]
+    #[arg(short = 'm', long = "mirror")]
     pub mirror: bool,
 
     /// Download all page requisites (CSS, JS, images) for offline viewing (Wget -p)
@@ -742,7 +742,7 @@ pub struct Cli {
     pub cacert: Option<PathBuf>,
 
     /// Specify client certificate file
-    #[arg(short = 'E', long = "cert", value_name = "FILE")]
+    #[arg(long = "cert", value_name = "FILE")]
     pub cert: Option<PathBuf>,
 
     /// Specify private key file
@@ -845,8 +845,8 @@ pub struct Cli {
     #[arg(short = 'U', long = "proxy-user", value_name = "USER:PASSWORD")]
     pub proxy_auth: Option<String>,
 
-    /// Maximum request timeout in seconds
-    #[arg(short = 'm', long = "max-time", value_name = "SECONDS")]
+    /// Maximum time allowed for total transfer in seconds (curl --max-time)
+    #[arg(long = "max-time", alias = "timeout", value_name = "SECONDS")]
     pub timeout: Option<u64>,
 
     /// Maximum number of automatic retries on connection failure
