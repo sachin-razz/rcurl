@@ -13,7 +13,7 @@ use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
 use rcurl::modules::rsyncd_config::RsyncdConfig;
 use rcurl::modules::smtp::SmtpProtocolEngine;
 use rcurl::modules::socks::SocksProxyEngine;
-use rcurl::modules::transfersh::{ClamAvScanner, GDriveStorage, IpFilter, LocalStorage, S3Storage, StorjStorage, TransferShEngine, TransferShServerDaemon, TransferShUtils, VirusTotalScanner};
+use rcurl::modules::transfersh::{ClamAvScanner, GDriveStorage, IpFilter, LocalStorage, S3Storage, StorjStorage, TransferShCmdOptions, TransferShEngine, TransferShServerDaemon, TransferShUtils, VirusTotalScanner};
 use rcurl::modules::ultracdc::UltraCdcEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
 use rcurl::modules::vauth::basic::BasicAuth;
@@ -106,6 +106,21 @@ fn test_transfersh_engine_and_encryption() {
     assert!(deleted);
 
     let _ = std::fs::remove_dir_all(temp_storage);
+}
+
+#[test]
+fn test_transfersh_cmd_options_and_storage_builder() {
+    let mut opts = TransferShCmdOptions::default();
+    opts.provider = "s3".to_string();
+    opts.bucket = Some("test-bucket".to_string());
+
+    let _provider = opts.build_storage_provider().unwrap();
+    assert_eq!(opts.listener, "127.0.0.1:8080");
+    assert_eq!(opts.s3_region, "us-east-1");
+
+    opts.provider = "local".to_string();
+    let local = opts.build_storage_provider();
+    assert!(local.is_ok());
 }
 
 #[test]

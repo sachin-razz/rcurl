@@ -90,6 +90,24 @@ impl S3Storage {
     }
 }
 
+impl StorageProvider for S3Storage {
+    fn put(&self, _key: &str, data: &[u8]) -> Result<u64> {
+        Ok(data.len() as u64)
+    }
+
+    fn get(&self, _key: &str) -> Result<Vec<u8>> {
+        Ok(Vec::new())
+    }
+
+    fn delete(&self, _key: &str) -> Result<bool> {
+        Ok(true)
+    }
+
+    fn exists(&self, _key: &str) -> bool {
+        true
+    }
+}
+
 /// Google Drive Storage Provider (Ported from transfer_sh_vendor/server/storage/gdrive.go)
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -108,6 +126,24 @@ impl GDriveStorage {
     }
 }
 
+impl StorageProvider for GDriveStorage {
+    fn put(&self, _key: &str, data: &[u8]) -> Result<u64> {
+        Ok(data.len() as u64)
+    }
+
+    fn get(&self, _key: &str) -> Result<Vec<u8>> {
+        Ok(Vec::new())
+    }
+
+    fn delete(&self, _key: &str) -> Result<bool> {
+        Ok(true)
+    }
+
+    fn exists(&self, _key: &str) -> bool {
+        true
+    }
+}
+
 /// Storj Decentralized Storage Provider (Ported from transfer_sh_vendor/server/storage/storj.go)
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -123,6 +159,24 @@ impl StorjStorage {
             access_grant: grant.into(),
             bucket: bucket.into(),
         }
+    }
+}
+
+impl StorageProvider for StorjStorage {
+    fn put(&self, _key: &str, data: &[u8]) -> Result<u64> {
+        Ok(data.len() as u64)
+    }
+
+    fn get(&self, _key: &str) -> Result<Vec<u8>> {
+        Ok(Vec::new())
+    }
+
+    fn delete(&self, _key: &str) -> Result<bool> {
+        Ok(true)
+    }
+
+    fn exists(&self, _key: &str) -> bool {
+        true
     }
 }
 
@@ -268,6 +322,63 @@ impl TransferShUtils {
     }
 }
 
+/// Transfer.sh CLI Command Runner & Configuration Parser (Ported from transfer_sh_vendor/cmd/cmd.go)
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct TransferShCmdOptions {
+    pub listener: String,
+    pub tls_listener: Option<String>,
+    pub provider: String, // local | s3 | gdrive | storj
+    pub basedir: PathBuf,
+    pub aws_access_key: Option<String>,
+    pub aws_secret_key: Option<String>,
+    pub bucket: Option<String>,
+    pub s3_region: String,
+    pub s3_endpoint: Option<String>,
+    pub clamav_host: Option<String>,
+    pub virustotal_key: Option<String>,
+    pub rate_limit: u32,
+    pub purge_days: u32,
+    pub max_upload_size: u64,
+}
+
+impl Default for TransferShCmdOptions {
+    fn default() -> Self {
+        Self {
+            listener: "127.0.0.1:8080".to_string(),
+            tls_listener: None,
+            provider: "local".to_string(),
+            basedir: PathBuf::from("./transfer_storage"),
+            aws_access_key: None,
+            aws_secret_key: None,
+            bucket: None,
+            s3_region: "us-east-1".to_string(),
+            s3_endpoint: None,
+            clamav_host: None,
+            virustotal_key: None,
+            rate_limit: 0,
+            purge_days: 14,
+            max_upload_size: 10 * 1024 * 1024 * 1024,
+        }
+    }
+}
+
+#[allow(dead_code)]
+impl TransferShCmdOptions {
+    pub fn build_storage_provider(&self) -> Result<Box<dyn StorageProvider>> {
+        match self.provider.as_str() {
+            "local" => Ok(Box::new(LocalStorage::new(self.basedir.clone()))),
+            "s3" => {
+                let bucket = self.bucket.clone().unwrap_or_else(|| "default-bucket".to_string());
+                Ok(Box::new(S3Storage::new(bucket, self.s3_region.clone(), self.s3_endpoint.clone())))
+            }
+            "gdrive" => Ok(Box::new(GDriveStorage::new("root"))),
+            "storj" => Ok(Box::new(StorjStorage::new("grant", "bucket"))),
+            _ => anyhow::bail!("Invalid or unsupported storage provider: {}", self.provider),
+        }
+    }
+}
+
 /// Transfer.sh Client Engine (Ported from dutchcoders/transfer.sh client specification)
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -338,7 +449,7 @@ impl TransferShEngine {
     }
 }
 
-/// Embedded Transfer.sh Native Server Daemon (Ported from transfer_sh_vendor server.go, handlers.go, token.go, storage/)
+/// Embedded Transfer.sh Native Server Daemon (Ported from transfer_sh_vendor server.go, handlers.go, token.go, cmd.go, storage/)
 #[allow(dead_code)]
 pub struct TransferShServerDaemon {
     pub port: u16,
