@@ -6,16 +6,17 @@ mod telemetry;
 
 use anyhow::Result;
 use clap::Parser;
-use cli::Cli;
+use cli::{parse_interval, Cli};
 use config::RcurlConfig;
+use colored::Colorize;
 use downloader::CurlEngine;
 use std::sync::Arc;
+use std::time::Duration;
 
 fn main() -> Result<()> {
     let mut cli = Cli::parse();
     let config = RcurlConfig::load_default();
 
-    // Merge ~/.rcurlrc configuration defaults if CLI flags are unspecified
     if let Some(cfg_threads) = config.default_threads {
         if cli.threads == 16 {
             cli.threads = cfg_threads;
@@ -45,7 +46,6 @@ fn main() -> Result<()> {
 
     let thread_count = cli.threads.max(1);
 
-    // Initialize Tokio runtime with user-defined or default 16 worker threads
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(thread_count)
         .enable_all()
@@ -60,6 +60,62 @@ async fn run_app(cli: Cli) -> Result<()> {
     let engine = Arc::new(CurlEngine::new(&cli)?);
     let cli_arc = Arc::new(cli);
 
+    if let Some(ref interval_str) = cli_arc.watch {
+        let interval = parse_interval(interval_str).unwrap_or(Duration::from_secs(2));
+        let mut count = 0u64;
+
+        loop {
+            count += 1;
+            if !cli_arc.silent && !cli_arc.json {
+                println!(
+                    "\n{} Poll #{} (Interval: {:?})",
+                    "👀 WATCH LOOP:".bold().magenta(),
+                    count,
+                    interval
+                );
+            }
+
+            execute_all(&engine, &cli_arc).await;
+            tokio::time::sleep(interval).await;
+        }
+    } else if let Some(ref watch_file_path) = cli_arc.watch_file {
+        println!(
+            "{} Watching file {} for changes...",
+            "👀 WATCH FILE:".bold().magenta(),
+            watch_file_path.display().to_string().cyan()
+        );
+
+        let mut last_mod = tokio::fs::metadata(watch_file_path)
+            .await
+            .ok()
+            .and_then(|m| m.modified().ok());
+
+        execute_all(&engine, &cli_arc).await;
+
+        loop {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            if let Ok(meta) = tokio::fs::metadata(watch_file_path).await {
+                if let Ok(mod_time) = meta.modified() {
+                    if Some(mod_time) != last_mod {
+                        last_mod = Some(mod_time);
+                        println!(
+                            "\n{} File {} modified! Re-triggering request...",
+                            "⚡ RE-TRIGGER:".bold().yellow(),
+                            watch_file_path.display().to_string().cyan()
+                        );
+                        execute_all(&engine, &cli_arc).await;
+                    }
+                }
+            }
+        }
+    } else {
+        execute_all(&engine, &cli_arc).await;
+    }
+
+    Ok(())
+}
+
+async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) {
     let mut tasks = Vec::new();
 
     for url in &cli_arc.urls {
@@ -73,10 +129,8 @@ async fn run_app(cli: Cli) -> Result<()> {
     }
 
     for task in tasks {
-        if let Err(err) = task.await? {
-            eprintln!("Error executing request: {:#}", err);
+        if let Err(err) = task.await {
+            eprintln!("Error executing request task: {:#}", err);
         }
     }
-
-    Ok(())
 }

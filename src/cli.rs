@@ -5,8 +5,8 @@ use std::path::PathBuf;
 #[command(
     name = "rcurl",
     author = "Sachin Rajpurohit",
-    version = "0.2.0",
-    about = "Ultra-fast 16-Thread Tokio Parallel Streaming CLI HTTP Downloader"
+    version = "0.3.0",
+    about = "Ultra-fast 16-Thread Tokio Parallel Streaming CLI HTTP Downloader & Monitor"
 )]
 pub struct Cli {
     /// URL(s) to fetch / download
@@ -100,6 +100,14 @@ pub struct Cli {
     /// Custom path for .rcurlrc configuration file
     #[arg(long = "config", value_name = "PATH")]
     pub config_path: Option<PathBuf>,
+
+    /// Periodically poll/watch URL every N seconds (e.g. -w 2s, -w 500ms)
+    #[arg(short = 'w', long = "watch", value_name = "INTERVAL")]
+    pub watch: Option<String>,
+
+    /// Automatically re-send request whenever specified file changes on disk
+    #[arg(long = "watch-file", value_name = "FILE")]
+    pub watch_file: Option<PathBuf>,
 }
 
 pub fn parse_rate_limit(s: &str) -> Option<u64> {
@@ -112,5 +120,18 @@ pub fn parse_rate_limit(s: &str) -> Option<u64> {
         s[..s.len() - 1].parse::<u64>().ok().map(|n| n * 1_073_741_824)
     } else {
         s.parse::<u64>().ok()
+    }
+}
+
+pub fn parse_interval(s: &str) -> Option<std::time::Duration> {
+    let s = s.trim().to_lowercase();
+    if s.ends_with("ms") {
+        s[..s.len() - 2].parse::<u64>().ok().map(std::time::Duration::from_millis)
+    } else if s.ends_with('s') {
+        s[..s.len() - 1].parse::<u64>().ok().map(std::time::Duration::from_secs)
+    } else if s.ends_with('m') {
+        s[..s.len() - 1].parse::<u64>().ok().map(|n| std::time::Duration::from_secs(n * 60))
+    } else {
+        s.parse::<u64>().ok().map(std::time::Duration::from_secs)
     }
 }
