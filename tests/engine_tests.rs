@@ -66,22 +66,22 @@ fn test_cli_parsing_v11_flags() {
 
 #[test]
 fn test_pattern_abc_memory_orchestration() {
+    use rcurl::modules::memory_patterns::{PatternAMemoryEngine, PatternBMemoryEngine, PatternCMemoryEngine};
+
     // Pattern A: Lockless same-thread buffer
-    let data = vec![0u8; 65536];
-    assert_eq!(data.len(), 65536);
+    let pat_a = PatternAMemoryEngine::new(65536);
+    let buf = pat_a.allocate_thread_local_buffer();
+    assert_eq!(buf.len(), 65536);
 
     // Pattern B: Cross-thread atomic lock-free channel pointer passing
-    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
-    let thread_handle = std::thread::spawn(move || {
-        let buf: Vec<u8> = rx.recv().unwrap();
-        assert_eq!(buf.len(), 65536);
-    });
-    tx.send(data).unwrap();
-    thread_handle.join().unwrap();
+    let pat_b = PatternBMemoryEngine::<Vec<u8>>::new();
+    assert!(pat_b.send_cross_thread(buf).is_ok());
+    let recv_buf = pat_b.recv_cross_thread().unwrap();
+    assert_eq!(recv_buf.len(), 65536);
 
     // Pattern C: Non-fragmenting arena daemon state
-    let daemon = MitmProxyDaemon::new(9090);
-    assert_eq!(daemon.port, 9090);
+    let pat_c = PatternCMemoryEngine::new("transfer-server");
+    assert!(pat_c.purge_background_arenas());
 }
 
 #[test]

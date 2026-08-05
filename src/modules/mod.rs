@@ -14,6 +14,7 @@ pub mod http2;
 pub mod http3;
 pub mod imap;
 pub mod mcts_quant;
+pub mod memory_patterns;
 pub mod mitm_proxy;
 pub mod mqtt;
 pub mod multicloud;

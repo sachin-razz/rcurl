@@ -1,4 +1,15 @@
-//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC, UltraCDC, TurboQuant, MCTS Router, SubQ, PolarQuant, WebDrive, Transfer.sh, BitTorrent, P2P Mesh, gRPC, RPC, Zstd Dict, eBPF XDP, TUI Dashboard, Tor, I2P, MultiCloud, Multicast, MITM Proxy).
+//! ```rust
+//! use rcurl::modules::memory_patterns::{PatternAMemoryEngine, PatternBMemoryEngine, PatternCMemoryEngine};
+//! let pat_a = PatternAMemoryEngine::new(65536);
+//! assert_eq!(pat_a.allocate_thread_local_buffer().len(), 65536);
+//!
+//! let pat_b = PatternBMemoryEngine::<Vec<u8>>::new();
+//! assert!(pat_b.send_cross_thread(vec![1, 2, 3]).is_ok());
+//! assert_eq!(pat_b.recv_cross_thread().unwrap(), vec![1, 2, 3]);
+//!
+//! let pat_c = PatternCMemoryEngine::new("transfer-server");
+//! assert!(pat_c.purge_background_arenas());
+//! ```
 //!
 //! # Example Doc-Tests
 //! ```rust
