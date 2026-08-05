@@ -32,6 +32,24 @@ impl CurlEngine {
             .tcp_nodelay(true)
             .tcp_keepalive(Duration::from_secs(60));
 
+        if cli.insecure {
+            builder = builder.danger_accept_invalid_certs(true);
+        }
+
+        if !cli.compressed {
+            builder = builder.no_gzip().no_brotli().no_deflate();
+        }
+
+        if let Some(connect_secs) = cli.connect_timeout {
+            builder = builder.connect_timeout(Duration::from_secs(connect_secs));
+        }
+
+        if cli.location {
+            builder = builder.redirect(reqwest::redirect::Policy::limited(cli.max_redirs));
+        } else {
+            builder = builder.redirect(reqwest::redirect::Policy::none());
+        }
+
         if cli.http2 {
             builder = builder.http2_prior_knowledge();
         }
@@ -45,15 +63,11 @@ impl CurlEngine {
         if let Some(ref ua) = cli.user_agent {
             builder = builder.user_agent(ua);
         } else {
-            builder = builder.user_agent("rcurl/0.4.0 (Brutally Optimized 16-Thread Tokio Stream Engine)");
+            builder = builder.user_agent("rcurl/0.5.0 (Brutally Optimized 16-Thread Tokio Stream Engine)");
         }
 
         if let Some(timeout_secs) = cli.timeout {
             builder = builder.timeout(Duration::from_secs(timeout_secs));
-        }
-
-        if !cli.location {
-            builder = builder.redirect(reqwest::redirect::Policy::none());
         }
 
         let client = builder.build().context("Failed to build HTTP client engine")?;
@@ -96,7 +110,11 @@ impl CurlEngine {
 
     async fn fetch_stream(&self, url: &str, cli: &Cli) -> Result<()> {
         let start_time = Instant::now();
-        let method = cli.method.to_uppercase();
+        let method = if cli.upload_file.is_some() {
+            "PUT".to_string()
+        } else {
+            cli.method.to_uppercase()
+        };
 
         let target_file = if let Some(ref out) = cli.output {
             Some(out.clone())
@@ -114,7 +132,7 @@ impl CurlEngine {
         let probe_res = self.probe_server(url, cli).await;
 
         if let (Some(path), Ok((content_length, supports_ranges))) = (target_file.clone(), probe_res) {
-            if supports_ranges && content_length > 1_000_000 && cli.threads > 1 && method == "GET" && cli.data.is_none() {
+            if supports_ranges && content_length > 1_000_000 && cli.threads > 1 && method == "GET" && cli.data.is_none() && cli.json_payload.is_none() {
                 return self
                     .download_parallel_16_thread(url, &path, content_length, cli, start_time)
                     .await;
@@ -177,7 +195,7 @@ impl CurlEngine {
             );
             println!(
                 "🚀 {} {}",
-                "rcurl Brutally Optimized 16-Thread Stream Engine".bold().green(),
+                "rcurl 16-Thread Parallel Stream Engine".bold().green(),
                 format!("({} MB)", total_size / 1_048_576).yellow()
             );
             println!(
@@ -189,7 +207,6 @@ impl CurlEngine {
             println!("{} File Destination : {}", "[LOG]".bold().magenta(), path.display().to_string().cyan());
             println!("{} Total Size       : {} bytes", "[LOG]".bold().magenta(), total_size.to_string().bold());
             println!("{} Worker Threads   : {}", "[LOG]".bold().magenta(), num_threads.to_string().bold().yellow());
-            println!("{} Memory Allocator : mimalloc (Zero-Allocation Loop)", "[LOG]".bold().magenta());
         }
 
         if let Some(parent) = path.parent() {
@@ -349,7 +366,7 @@ impl CurlEngine {
         } else if !cli.silent {
             println!(
                 "\n{} Downloaded {} across {} Tokio streams in {:.2}s ({:.2} MB/s)",
-                "✔ BRUTAL STREAM COMPLETE:".bold().green(),
+                "✔ STREAM COMPLETE:".bold().green(),
                 path.display().to_string().cyan(),
                 num_threads.to_string().yellow(),
                 elapsed,
@@ -367,7 +384,11 @@ impl CurlEngine {
         cli: &Cli,
         start_time: Instant,
     ) -> Result<()> {
-        let method = cli.method.to_uppercase();
+        let method = if cli.upload_file.is_some() {
+            "PUT".to_string()
+        } else {
+            cli.method.to_uppercase()
+        };
 
         let mut req = match method.as_str() {
             "POST" => self.client.post(url),
@@ -392,8 +413,16 @@ impl CurlEngine {
             }
         }
 
-        if let Some(ref data) = cli.data {
+        if let Some(ref json_body) = cli.json_payload {
+            req = req
+                .header("Content-Type", "application/json")
+                .header("Accept", "application/json")
+                .body(json_body.clone());
+        } else if let Some(ref data) = cli.data {
             req = req.body(data.clone());
+        } else if let Some(ref up_file) = cli.upload_file {
+            let file_bytes = fs::read(up_file).await.context("Failed to read upload file")?;
+            req = req.body(file_bytes);
         }
 
         let mut resume_offset: u64 = 0;
@@ -428,6 +457,17 @@ impl CurlEngine {
             for (k, v) in response.headers() {
                 eprintln!("{} {}: {}", "<".green(), k.as_str().yellow(), v.to_str().unwrap_or(""));
             }
+        }
+
+        // Handle --dump-header
+        if let Some(ref dump_path) = cli.dump_header {
+            let mut dump = String::new();
+            dump.push_str(&format!("HTTP/1.1 {}\n", status));
+            for (k, v) in response.headers() {
+                dump.push_str(&format!("{}: {}\n", k.as_str(), v.to_str().unwrap_or("")));
+            }
+            dump.push('\n');
+            fs::write(dump_path, dump).await?;
         }
 
         if !status.is_success() && status != reqwest::StatusCode::PARTIAL_CONTENT {
@@ -512,7 +552,9 @@ impl CurlEngine {
                 md5_hasher.update(&chunk);
                 total_bytes_downloaded += chunk.len() as u64;
             }
-            stdout.flush().await?;
+            if !cli.no_buffer {
+                stdout.flush().await?;
+            }
         }
 
         if let Some(bar) = pb {

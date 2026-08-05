@@ -5,8 +5,8 @@ use std::path::PathBuf;
 #[command(
     name = "rcurl",
     author = "Sachin Rajpurohit",
-    version = "0.3.0",
-    about = "Ultra-fast 16-Thread Tokio Parallel Streaming CLI HTTP Downloader & Monitor"
+    version = "0.5.0",
+    about = "16-Thread Tokio Parallel Streaming CLI HTTP Client (Full Curl Feature Matrix)"
 )]
 pub struct Cli {
     /// URL(s) to fetch / download
@@ -32,6 +32,54 @@ pub struct Cli {
     /// HTTP POST / PUT data payload
     #[arg(short = 'd', long = "data", value_name = "DATA")]
     pub data: Option<String>,
+
+    /// Send JSON payload and automatically set Content-Type & Accept to application/json
+    #[arg(long = "json", value_name = "JSON")]
+    pub json_payload: Option<String>,
+
+    /// Send multipart/form-data form fields (e.g. -F "file=@photo.jpg")
+    #[arg(short = 'F', long = "form", value_name = "KEY=VALUE")]
+    pub form: Vec<String>,
+
+    /// Transfer local file to remote server via PUT (-T file.tar.gz)
+    #[arg(short = 'T', long = "upload-file", value_name = "FILE")]
+    pub upload_file: Option<PathBuf>,
+
+    /// Request compressed response (gzip, brotli, deflate)
+    #[arg(long = "compressed")]
+    pub compressed: bool,
+
+    /// Allow insecure SSL/TLS connections (skip certificate verification)
+    #[arg(short = 'k', long = "insecure")]
+    pub insecure: bool,
+
+    /// Specify CA certificate file to verify peer
+    #[arg(long = "cacert", value_name = "FILE")]
+    pub cacert: Option<PathBuf>,
+
+    /// Specify client certificate file
+    #[arg(long = "cert", value_name = "FILE")]
+    pub cert: Option<PathBuf>,
+
+    /// Specify private key file
+    #[arg(long = "key", value_name = "FILE")]
+    pub key: Option<PathBuf>,
+
+    /// Dump raw response headers to a separate file
+    #[arg(long = "dump-header", value_name = "FILE")]
+    pub dump_header: Option<PathBuf>,
+
+    /// Maximum number of redirects to follow (default: 50)
+    #[arg(long = "max-redirs", default_value_t = 50, value_name = "NUM")]
+    pub max_redirs: usize,
+
+    /// Maximum time allowed for connection phase in seconds
+    #[arg(long = "connect-timeout", value_name = "SECONDS")]
+    pub connect_timeout: Option<u64>,
+
+    /// Disable stdout buffering for real-time streaming data
+    #[arg(short = 'N', long = "no-buffer")]
+    pub no_buffer: bool,
 
     /// Follow HTTP redirects
     #[arg(short = 'L', long = "location", default_value_t = true)]
