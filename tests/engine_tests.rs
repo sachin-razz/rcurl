@@ -2,6 +2,7 @@ use rcurl::cli::Cli;
 use rcurl::modules::altsvc::AltSvcCache;
 use rcurl::modules::conncache::ConnCache;
 use rcurl::modules::cookie::CookieStore;
+use rcurl::modules::fastcdc::FastCdcEngine;
 use rcurl::modules::ftp::FtpProtocolEngine;
 use rcurl::modules::hsts::HstsCache;
 use rcurl::modules::http::HttpProtocolEngine;
@@ -33,7 +34,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -53,6 +54,20 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.rrsync_ro);
     assert_eq!(cli.rrsync_dir, Some("/tmp/backup".to_string()));
     assert!(cli.path_containment);
+    assert!(cli.fastcdc);
+}
+
+#[test]
+fn test_fastcdc_variable_chunking() {
+    let temp_file = std::env::temp_dir().join("fastcdc_test_data.txt");
+    std::fs::write(&temp_file, "FastCDC Content Defined Variable Chunking Engine Data Test Payload").unwrap();
+
+    let cdc = FastCdcEngine::new(16, 32, 64);
+    let chunks = cdc.chunk_file(&temp_file).unwrap();
+    assert!(!chunks.is_empty());
+    assert!(chunks[0].length >= 16);
+
+    let _ = std::fs::remove_file(temp_file);
 }
 
 #[test]

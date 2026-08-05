@@ -3,6 +3,7 @@ pub mod aws_sigv4;
 pub mod conncache;
 pub mod cookie;
 pub mod doh;
+pub mod fastcdc;
 pub mod ftp;
 pub mod hsts;
 pub mod http;

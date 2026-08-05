@@ -509,6 +509,10 @@ pub struct Cli {
     #[arg(long = "path-containment", alias = "strict-path")]
     pub path_containment: bool,
 
+    /// Enable FastCDC Content-Defined Variable Chunking Engine (Next-Gen Delta Sync)
+    #[arg(long = "fastcdc")]
+    pub fastcdc: bool,
+
     /// Span across hosts during recursive download (Wget -H / --span-hosts)
     #[arg(long = "span-hosts")]
     pub span_hosts: bool,

@@ -1,4 +1,4 @@
-//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync).
+//! `rcurl`: High-Performance 16-Thread Tokio Protocol Suite (cURL, Wget, Rsync, Rsync-SSL, Rsyncd, Rrsync, FastCDC).
 //!
 //! # Example Doc-Tests
 //! ```rust
@@ -25,6 +25,12 @@
 //! let engine = RrsyncEngine::new("/tmp").read_only().munge_symlinks();
 //! assert!(engine.read_only);
 //! assert!(engine.munge_symlinks);
+//! ```
+//!
+//! ```rust
+//! use rcurl::modules::fastcdc::FastCdcEngine;
+//! let cdc = FastCdcEngine::new(512, 1024, 2048);
+//! assert_eq!(cdc.avg_size, 1024);
 //! ```
 
 pub mod cli;
