@@ -942,6 +942,7 @@ pub struct Cli {
     pub write_out: Option<String>,
 }
 
+#[allow(dead_code)]
 pub fn parse_rate_limit(s: &str) -> Option<u64> {
     let s = s.trim().to_uppercase();
     if s.ends_with('K') {
@@ -955,6 +956,7 @@ pub fn parse_rate_limit(s: &str) -> Option<u64> {
     }
 }
 
+#[allow(dead_code)]
 pub fn parse_interval(s: &str) -> Option<std::time::Duration> {
     let s = s.trim().to_lowercase();
     if s.ends_with("ms") {
