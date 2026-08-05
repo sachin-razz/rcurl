@@ -31,7 +31,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -40,6 +40,9 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert!(cli.archive);
     assert!(cli.compress);
     assert!(cli.delete_extraneous);
+    assert!(cli.dry_run);
+    assert!(cli.backup);
+    assert!(cli.list_only);
 }
 
 #[test]
@@ -61,16 +64,36 @@ fn test_rsync_file_sync() {
     }
 
     let rsync = RsyncEngine::new();
-    let synced = rsync.sync_file(&src, &dest).unwrap();
-    assert!(synced);
+    let stats = rsync.sync_file(&src, &dest).unwrap();
+    assert_eq!(stats.transferred_files, 1);
     assert_eq!(std::fs::read_to_string(&dest).unwrap(), "Content for rsync delta sync test");
 
-    // Second sync should return false (already identical)
-    let re_synced = rsync.sync_file(&src, &dest).unwrap();
-    assert!(!re_synced);
+    // Second sync should return 0 transferred files (already identical)
+    let re_stats = rsync.sync_file(&src, &dest).unwrap();
+    assert_eq!(re_stats.transferred_files, 0);
 
     let _ = std::fs::remove_file(src);
     let _ = std::fs::remove_file(dest);
+}
+
+#[test]
+fn test_rsync_dry_run_and_list_only() {
+    let temp_dir = std::env::temp_dir();
+    let src = temp_dir.join("rsync_dry_src.txt");
+    let dest = temp_dir.join("rsync_dry_dest.txt");
+
+    std::fs::write(&src, "Dry run content").unwrap();
+
+    let mut rsync = RsyncEngine::new();
+    rsync.dry_run = true;
+    let stats = rsync.sync_file(&src, &dest).unwrap();
+    assert_eq!(stats.transferred_files, 1);
+    assert!(!dest.exists()); // Dry run must NOT write file
+
+    let list = rsync.list_directory(&src).unwrap();
+    assert!(!list.is_empty());
+
+    let _ = std::fs::remove_file(src);
 }
 
 #[test]

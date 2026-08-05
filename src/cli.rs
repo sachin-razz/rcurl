@@ -377,6 +377,82 @@ pub struct Cli {
     #[arg(long = "bwlimit", value_name = "KBPS")]
     pub bwlimit: Option<u64>,
 
+    /// Perform trial run without making changes (Rsync --dry-run)
+    #[arg(long = "dry-run")]
+    pub dry_run: bool,
+
+    /// Copy files whole without delta transfer (Rsync --whole-file)
+    #[arg(long = "whole-file")]
+    pub whole_file: bool,
+
+    /// Update destination files in-place (Rsync --inplace)
+    #[arg(long = "inplace")]
+    pub inplace: bool,
+
+    /// Make backup copies of destination files (Rsync --backup)
+    #[arg(long = "backup")]
+    pub backup: bool,
+
+    /// Backup directory for destination files (Rsync --backup-dir)
+    #[arg(long = "backup-dir", value_name = "DIR")]
+    pub backup_dir: Option<String>,
+
+    /// Backup file suffix (Rsync --suffix)
+    #[arg(long = "suffix", value_name = "SUFFIX")]
+    pub suffix: Option<String>,
+
+    /// Force checksum comparison before transfer (Rsync --checksum)
+    #[arg(long = "checksum")]
+    pub checksum_check: bool,
+
+    /// Itemize change summary for all updates (Rsync --itemize-changes)
+    #[arg(long = "itemize-changes")]
+    pub itemize_changes: bool,
+
+    /// Output verbose transfer statistics (Rsync --stats)
+    #[arg(long = "stats")]
+    pub stats: bool,
+
+    /// Put updated files into place at end (Rsync --delay-updates)
+    #[arg(long = "delay-updates")]
+    pub delay_updates: bool,
+
+    /// Keep partially transferred files (Rsync --partial)
+    #[arg(long = "partial")]
+    pub partial: bool,
+
+    /// Directory for partially transferred files (Rsync --partial-dir)
+    #[arg(long = "partial-dir", value_name = "DIR")]
+    pub partial_dir: Option<String>,
+
+    /// Prune empty directory chains from file list (Rsync --prune-empty-dirs)
+    #[arg(long = "prune-empty-dirs")]
+    pub prune_empty_dirs: bool,
+
+    /// Sender removes synchronized files (Rsync --remove-source-files)
+    #[arg(long = "remove-source-files")]
+    pub remove_source_files: bool,
+
+    /// Custom permissions chmod mode (Rsync --chmod)
+    #[arg(long = "chmod", value_name = "MODE")]
+    pub chmod_mode: Option<String>,
+
+    /// Force ownership user:group mapping (Rsync --chown)
+    #[arg(long = "chown", value_name = "USER:GROUP")]
+    pub chown_mapping: Option<String>,
+
+    /// Transfer numeric UID/GID values (Rsync --numeric-ids)
+    #[arg(long = "numeric-ids")]
+    pub numeric_ids: bool,
+
+    /// List files instead of transferring (Rsync --list-only)
+    #[arg(long = "list-only")]
+    pub list_only: bool,
+
+    /// Create missing path components of destination (Rsync --mkpath)
+    #[arg(long = "mkpath")]
+    pub mkpath: bool,
+
     /// Span across hosts during recursive download (Wget -H / --span-hosts)
     #[arg(long = "span-hosts")]
     pub span_hosts: bool,

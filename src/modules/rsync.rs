@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use md5::{Digest, Md5};
 use std::fs::{self, File};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -14,11 +14,29 @@ pub struct RsyncBlockChecksum {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
+pub struct RsyncStats {
+    pub total_files: usize,
+    pub transferred_files: usize,
+    pub total_bytes: u64,
+    pub transferred_bytes: u64,
+    pub matched_bytes: u64,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
 pub struct RsyncEngine {
     pub block_size: usize,
     pub archive_mode: bool,
     pub compress: bool,
     pub delete_extraneous: bool,
+    pub dry_run: bool,
+    pub whole_file: bool,
+    pub inplace: bool,
+    pub backup: bool,
+    pub backup_dir: Option<PathBuf>,
+    pub backup_suffix: String,
+    pub remove_source: bool,
+    pub list_only: bool,
 }
 
 impl Default for RsyncEngine {
@@ -28,6 +46,14 @@ impl Default for RsyncEngine {
             archive_mode: true,
             compress: true,
             delete_extraneous: false,
+            dry_run: false,
+            whole_file: false,
+            inplace: false,
+            backup: false,
+            backup_dir: None,
+            backup_suffix: "~".to_string(),
+            remove_source: false,
+            list_only: false,
         }
     }
 }
@@ -79,35 +105,84 @@ impl RsyncEngine {
         Ok(signatures)
     }
 
+    /// List directory contents (Rsync --list-only)
+    pub fn list_directory(&self, dir_path: &Path) -> Result<Vec<String>> {
+        let mut file_list = Vec::new();
+        if !dir_path.exists() {
+            anyhow::bail!("Path {} does not exist", dir_path.display());
+        }
+
+        if dir_path.is_file() {
+            let meta = fs::metadata(dir_path)?;
+            file_list.push(format!("-rw-r--r-- {:>10} {}", meta.len(), dir_path.display()));
+        } else if dir_path.is_dir() {
+            for entry in fs::read_dir(dir_path)? {
+                let entry = entry?;
+                let path = entry.path();
+                let meta = entry.metadata()?;
+                let kind = if meta.is_dir() { "d" } else { "-" };
+                file_list.push(format!("{}rw-r--r-- {:>10} {}", kind, meta.len(), path.display()));
+            }
+        }
+        Ok(file_list)
+    }
+
     /// Sync local source directory or file to destination path
-    pub fn sync_file(&self, src: &Path, dest: &Path) -> Result<bool> {
+    pub fn sync_file(&self, src: &Path, dest: &Path) -> Result<RsyncStats> {
         if !src.exists() {
             anyhow::bail!("Source path {} does not exist", src.display());
         }
 
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent)?;
-        }
+        let mut stats = RsyncStats {
+            total_files: 1,
+            transferred_files: 0,
+            total_bytes: 0,
+            transferred_bytes: 0,
+            matched_bytes: 0,
+        };
 
         let src_bytes = fs::read(src)?;
+        stats.total_bytes = src_bytes.len() as u64;
 
         if dest.exists() {
             let dest_bytes = fs::read(dest)?;
             if src_bytes == dest_bytes {
-                return Ok(false); // File is identical, no sync needed
+                stats.matched_bytes = src_bytes.len() as u64;
+                return Ok(stats); // File is identical, no transfer needed
+            }
+
+            if self.backup && !self.dry_run {
+                let backup_path = if let Some(ref bdir) = self.backup_dir {
+                    fs::create_dir_all(bdir)?;
+                    bdir.join(dest.file_name().unwrap())
+                } else {
+                    PathBuf::from(format!("{}{}", dest.display(), self.backup_suffix))
+                };
+                let _ = fs::copy(dest, backup_path);
             }
         }
 
-        fs::write(dest, &src_bytes)?;
+        if !self.dry_run {
+            if let Some(parent) = dest.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(dest, &src_bytes)?;
 
-        if self.archive_mode {
-            if let Ok(metadata) = fs::metadata(src) {
-                if let Ok(modified) = metadata.modified() {
-                    let _ = filetime::set_file_mtime(dest, filetime::FileTime::from_system_time(modified));
+            if self.archive_mode {
+                if let Ok(metadata) = fs::metadata(src) {
+                    if let Ok(modified) = metadata.modified() {
+                        let _ = filetime::set_file_mtime(dest, filetime::FileTime::from_system_time(modified));
+                    }
                 }
             }
+
+            if self.remove_source {
+                let _ = fs::remove_file(src);
+            }
         }
 
-        Ok(true) // File was synced
+        stats.transferred_files = 1;
+        stats.transferred_bytes = src_bytes.len() as u64;
+        Ok(stats)
     }
 }
