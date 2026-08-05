@@ -1,12 +1,20 @@
 use rcurl::cli::Cli;
 use rcurl::modules::altsvc::AltSvcCache;
+use rcurl::modules::conncache::ConnCache;
 use rcurl::modules::cookie::CookieStore;
+use rcurl::modules::ftp::FtpProtocolEngine;
 use rcurl::modules::hsts::HstsCache;
+use rcurl::modules::http::HttpProtocolEngine;
+use rcurl::modules::smtp::SmtpProtocolEngine;
+use rcurl::modules::socks::SocksProxyEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
 use rcurl::modules::vauth::basic::BasicAuth;
 use rcurl::modules::vauth::oauth2::OAuth2Auth;
+use rcurl::modules::vdns::cares::CaresDnsEngine;
 use rcurl::modules::vdns::dns::DnsEngine;
 use rcurl::modules::vquic::quic::QuicTransportEngine;
+use rcurl::modules::vssh::ssh::SshEngine;
+use rcurl::modules::ws::WebSocketEngine;
 use clap::Parser;
 
 #[test]
@@ -47,6 +55,65 @@ fn test_hsts_cache() {
     assert!(cache.should_upgrade("api.github.com"));
     assert!(cache.should_upgrade("API.GITHUB.COM"));
     assert!(!cache.should_upgrade("httpbin.org"));
+}
+
+#[test]
+fn test_conn_cache() {
+    let mut conn_cache = ConnCache::new();
+    assert_eq!(conn_cache.acquire_connection(), 1);
+    assert_eq!(conn_cache.acquire_connection(), 2);
+    conn_cache.release_connection();
+    assert_eq!(conn_cache.active_connections, 1);
+}
+
+#[test]
+fn test_ftp_protocol_engine() {
+    let ftp = FtpProtocolEngine::new(true);
+    assert!(ftp.passive_mode);
+    assert_eq!(ftp.build_pasv_command(), "PASV\r\n");
+    assert_eq!(ftp.build_pwd_command(), "PWD\r\n");
+}
+
+#[test]
+fn test_http_protocol_engine() {
+    let req = HttpProtocolEngine::format_request("get", "/status", "httpbin.org");
+    assert!(req.contains("GET /status HTTP/1.1"));
+    assert!(req.contains("Host: httpbin.org"));
+}
+
+#[test]
+fn test_websocket_engine() {
+    let hs = WebSocketEngine::build_handshake_header("dGhlIHNhbXBsZSBub25jZQ==");
+    assert!(hs.contains("Upgrade: websocket"));
+    assert!(hs.contains("Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=="));
+}
+
+#[test]
+fn test_smtp_engine() {
+    let ehlo = SmtpProtocolEngine::build_ehlo_command("localhost");
+    let mail_from = SmtpProtocolEngine::build_mail_from("user@example.com");
+    assert_eq!(ehlo, "EHLO localhost\r\n");
+    assert_eq!(mail_from, "MAIL FROM:<user@example.com>\r\n");
+}
+
+#[test]
+fn test_socks_proxy_engine() {
+    let socks = SocksProxyEngine::new("127.0.0.1".to_string(), 1080);
+    assert_eq!(socks.proxy_port, 1080);
+    assert_eq!(SocksProxyEngine::build_socks5_greeting(), [0x05, 0x01, 0x00]);
+}
+
+#[test]
+fn test_cares_dns_engine() {
+    let option = CaresDnsEngine::format_cares_channel_option();
+    assert!(option.contains("ARES_OPT_FLAGS"));
+}
+
+#[test]
+fn test_ssh_engine() {
+    let auth_req = SshEngine::format_ssh_auth_request("root");
+    assert!(auth_req.contains("user: root"));
+    assert!(auth_req.contains("publickey"));
 }
 
 #[test]
