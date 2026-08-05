@@ -5,6 +5,127 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, TcpStream};
 use std::path::{Path, PathBuf};
 
+/// Transfer.sh Storage Provider Trait (Ported from transfer_sh_vendor/server/storage/common.go)
+#[allow(dead_code)]
+pub trait StorageProvider: Send + Sync {
+    fn put(&self, key: &str, data: &[u8]) -> Result<u64>;
+    fn get(&self, key: &str) -> Result<Vec<u8>>;
+    fn delete(&self, key: &str) -> Result<bool>;
+    fn exists(&self, key: &str) -> bool;
+}
+
+/// Local Filesystem Storage Provider (Ported from transfer_sh_vendor/server/storage/local.go)
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct LocalStorage {
+    pub root_dir: PathBuf,
+}
+
+#[allow(dead_code)]
+impl LocalStorage {
+    pub fn new(root_dir: PathBuf) -> Self {
+        Self { root_dir }
+    }
+}
+
+impl StorageProvider for LocalStorage {
+    fn put(&self, key: &str, data: &[u8]) -> Result<u64> {
+        let path = self.root_dir.join(key);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut file = File::create(&path)?;
+        file.write_all(data)?;
+        Ok(data.len() as u64)
+    }
+
+    fn get(&self, key: &str) -> Result<Vec<u8>> {
+        let path = self.root_dir.join(key);
+        let mut file = File::open(&path)?;
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf)?;
+        Ok(buf)
+    }
+
+    fn delete(&self, key: &str) -> Result<bool> {
+        let path = self.root_dir.join(key);
+        if path.exists() {
+            fs::remove_file(&path)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    fn exists(&self, key: &str) -> bool {
+        self.root_dir.join(key).exists()
+    }
+}
+
+/// AWS S3 Storage Provider (Ported from transfer_sh_vendor/server/storage/s3.go)
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct S3Storage {
+    pub bucket: String,
+    pub region: String,
+    pub endpoint: Option<String>,
+}
+
+#[allow(dead_code)]
+impl S3Storage {
+    pub fn new(bucket: impl Into<String>, region: impl Into<String>, endpoint: Option<String>) -> Self {
+        Self {
+            bucket: bucket.into(),
+            region: region.into(),
+            endpoint,
+        }
+    }
+
+    pub fn build_s3_url(&self, key: &str) -> String {
+        if let Some(ref ep) = self.endpoint {
+            format!("{}/{}/{}", ep.trim_end_matches('/'), self.bucket, key)
+        } else {
+            format!("https://{}.s3.{}.amazonaws.com/{}", self.bucket, self.region, key)
+        }
+    }
+}
+
+/// Google Drive Storage Provider (Ported from transfer_sh_vendor/server/storage/gdrive.go)
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct GDriveStorage {
+    pub root_folder_id: String,
+    pub client_id: Option<String>,
+}
+
+#[allow(dead_code)]
+impl GDriveStorage {
+    pub fn new(folder_id: impl Into<String>) -> Self {
+        Self {
+            root_folder_id: folder_id.into(),
+            client_id: None,
+        }
+    }
+}
+
+/// Storj Decentralized Storage Provider (Ported from transfer_sh_vendor/server/storage/storj.go)
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct StorjStorage {
+    pub access_grant: String,
+    pub bucket: String,
+}
+
+#[allow(dead_code)]
+impl StorjStorage {
+    pub fn new(grant: impl Into<String>, bucket: impl Into<String>) -> Self {
+        Self {
+            access_grant: grant.into(),
+            bucket: bucket.into(),
+        }
+    }
+}
+
 /// Transfer.sh File Record
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
@@ -217,12 +338,11 @@ impl TransferShEngine {
     }
 }
 
-/// Embedded Transfer.sh Native Server Daemon (Ported from transfer_sh_vendor server.go, handlers.go, token.go)
+/// Embedded Transfer.sh Native Server Daemon (Ported from transfer_sh_vendor server.go, handlers.go, token.go, storage/)
 #[allow(dead_code)]
-#[derive(Debug, Clone)]
 pub struct TransferShServerDaemon {
     pub port: u16,
-    pub storage_path: PathBuf,
+    pub storage: Box<dyn StorageProvider>,
     pub max_upload_size: u64,
     pub purge_days: u32,
     pub ip_filter: IpFilter,
@@ -233,9 +353,10 @@ pub struct TransferShServerDaemon {
 
 impl Default for TransferShServerDaemon {
     fn default() -> Self {
+        let local_storage = LocalStorage::new(PathBuf::from("./transfer_storage"));
         Self {
             port: 8080,
-            storage_path: PathBuf::from("./transfer_storage"),
+            storage: Box::new(local_storage),
             max_upload_size: 10 * 1024 * 1024 * 1024, // 10 GB limit
             purge_days: 14,
             ip_filter: IpFilter::new(vec![], vec![]),
@@ -248,10 +369,10 @@ impl Default for TransferShServerDaemon {
 
 #[allow(dead_code)]
 impl TransferShServerDaemon {
-    pub fn new(port: u16, storage: PathBuf) -> Self {
+    pub fn new(port: u16, storage: Box<dyn StorageProvider>) -> Self {
         Self {
             port,
-            storage_path: storage,
+            storage,
             ..Default::default()
         }
     }
@@ -286,16 +407,11 @@ impl TransferShServerDaemon {
         }
 
         let safe_name = TransferShUtils::sanitize_filename(file_name);
-        fs::create_dir_all(&self.storage_path)?;
         let file_id = self.generate_file_id(&safe_name);
         let delete_token = self.generate_delete_token(&file_id);
 
-        let target_dir = self.storage_path.join(&file_id);
-        fs::create_dir_all(&target_dir)?;
-        let target_file = target_dir.join(&safe_name);
-
-        let mut file = File::create(&target_file).context("Failed to create file on transfer.sh storage")?;
-        file.write_all(data).context("Failed to write bytes to transfer.sh storage")?;
+        let storage_key = format!("{}/{}", file_id, safe_name);
+        self.storage.put(&storage_key, data).context("Failed to write bytes to transfer.sh storage provider")?;
 
         let is_clean = if let Some(ref clam) = self.clamav {
             clam.scan_bytes(data).unwrap_or(true)
@@ -327,8 +443,8 @@ impl TransferShServerDaemon {
     pub fn delete_file(&mut self, file_id: &str, delete_token: &str) -> Result<bool> {
         if let Some(record) = self.files.get(file_id) {
             if record.delete_token == delete_token {
-                let target_dir = self.storage_path.join(file_id);
-                let _ = fs::remove_dir_all(target_dir);
+                let storage_key = format!("{}/{}", file_id, record.file_name);
+                let _ = self.storage.delete(&storage_key);
                 self.files.remove(file_id);
                 return Ok(true);
             }

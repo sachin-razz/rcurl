@@ -13,7 +13,7 @@ use rcurl::modules::rsync::{RsyncDaemonServer, RsyncEngine, RsyncSslEngine};
 use rcurl::modules::rsyncd_config::RsyncdConfig;
 use rcurl::modules::smtp::SmtpProtocolEngine;
 use rcurl::modules::socks::SocksProxyEngine;
-use rcurl::modules::transfersh::{ClamAvScanner, IpFilter, TransferShEngine, TransferShServerDaemon, TransferShUtils, VirusTotalScanner};
+use rcurl::modules::transfersh::{ClamAvScanner, GDriveStorage, IpFilter, LocalStorage, S3Storage, StorjStorage, TransferShEngine, TransferShServerDaemon, TransferShUtils, VirusTotalScanner};
 use rcurl::modules::ultracdc::UltraCdcEngine;
 use rcurl::modules::vauth::aws_sigv4::AwsSigV4Auth;
 use rcurl::modules::vauth::basic::BasicAuth;
@@ -93,8 +93,9 @@ fn test_transfersh_engine_and_encryption() {
     let decrypted = TransferShEngine::decrypt_payload(&encrypted, key);
     assert_eq!(decrypted, data);
 
-    let temp_storage = std::env::temp_dir().join("tsh_test_storage");
-    let mut daemon = TransferShServerDaemon::new(9090, temp_storage.clone());
+    let temp_storage = std::env::temp_dir().join("tsh_test_storage_v9");
+    let storage = LocalStorage::new(temp_storage.clone());
+    let mut daemon = TransferShServerDaemon::new(9090, Box::new(storage));
     assert_eq!(daemon.listen_address(), "0.0.0.0:9090");
 
     let record = daemon.store_file("test.txt", b"Payload content", Some(7), Some(5)).unwrap();
@@ -105,6 +106,18 @@ fn test_transfersh_engine_and_encryption() {
     assert!(deleted);
 
     let _ = std::fs::remove_dir_all(temp_storage);
+}
+
+#[test]
+fn test_transfersh_storage_providers() {
+    let s3 = S3Storage::new("my-bucket", "us-east-1", None);
+    assert_eq!(s3.build_s3_url("file.txt"), "https://my-bucket.s3.us-east-1.amazonaws.com/file.txt");
+
+    let gdrive = GDriveStorage::new("folder_id_123");
+    assert_eq!(gdrive.root_folder_id, "folder_id_123");
+
+    let storj = StorjStorage::new("grant_abc", "storj-bucket");
+    assert_eq!(storj.bucket, "storj-bucket");
 }
 
 #[test]
