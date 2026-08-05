@@ -34,7 +34,7 @@ fn test_cli_parsing_curl_flags() {
 
 #[test]
 fn test_cli_parsing_wget_and_rsync_flags() {
-    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc"];
+    let args = vec!["rcurl", "https://example.com", "--recursive", "-l", "3", "--accept", "pdf,png", "-q", "--archive", "-z", "--delete", "--dry-run", "--backup", "--list-only", "--type=openssl", "--rsync-ssl", "--daemon", "--rsyncd-config=/etc/rsyncd.conf", "--rrsync", "--rrsync-ro", "--rrsync-dir=/tmp/backup", "--path-containment", "--fastcdc", "--adler-md5"];
     let cli = Cli::try_parse_from(args).unwrap();
     assert!(cli.recursive);
     assert_eq!(cli.level, 3);
@@ -55,6 +55,7 @@ fn test_cli_parsing_wget_and_rsync_flags() {
     assert_eq!(cli.rrsync_dir, Some("/tmp/backup".to_string()));
     assert!(cli.path_containment);
     assert!(cli.fastcdc);
+    assert!(cli.adler_md5);
 }
 
 #[test]

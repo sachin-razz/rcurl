@@ -513,6 +513,10 @@ pub struct Cli {
     #[arg(long = "fastcdc")]
     pub fastcdc: bool,
 
+    /// Force classic Adler-32 & MD5 Delta Engine algorithm
+    #[arg(long = "adler-md5", alias = "adler32-md5")]
+    pub adler_md5: bool,
+
     /// Span across hosts during recursive download (Wget -H / --span-hosts)
     #[arg(long = "span-hosts")]
     pub span_hosts: bool,

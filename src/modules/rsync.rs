@@ -39,6 +39,7 @@ pub struct RsyncEngine {
     pub backup_suffix: String,
     pub remove_source: bool,
     pub list_only: bool,
+    pub use_adler_md5: bool,
 }
 
 impl Default for RsyncEngine {
@@ -56,6 +57,7 @@ impl Default for RsyncEngine {
             backup_suffix: "~".to_string(),
             remove_source: false,
             list_only: false,
+            use_adler_md5: true,
         }
     }
 }
