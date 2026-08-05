@@ -79,6 +79,7 @@ impl FastCdcEngine {
     }
 
     /// Perform Fast Content-Defined Chunking (FastCDC) on file data
+    #[inline(always)]
     pub fn chunk_file(&self, file_path: &Path) -> Result<Vec<FastCdcChunk>> {
         let mut file = File::open(file_path)?;
         let mut buffer = Vec::new();

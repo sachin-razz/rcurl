@@ -22,7 +22,7 @@ use std::time::Duration;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() -> Result<()> {
-    let mut cli = Cli::parse();
+    let mut cli = Box::new(Cli::parse());
     let config = RcurlConfig::load_default();
 
     if let Some(cfg_threads) = config.default_threads {
@@ -79,7 +79,7 @@ fn main() -> Result<()> {
         .build()?;
 
     runtime.block_on(async move {
-        run_app(cli).await
+        run_app(*cli).await
     })
 }
 

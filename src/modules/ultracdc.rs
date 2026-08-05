@@ -46,7 +46,8 @@ impl UltraCdcEngine {
         }
     }
 
-    /// Perform UltraCDC normalized dual-mask chunking on file data
+    /// Perform UltraCDC dual-mask normalized variable chunking and Merkle-DAG hashing
+    #[inline(always)]
     pub fn chunk_file(&self, file_path: &Path) -> Result<(Vec<UltraCdcChunk>, String)> {
         let mut file = File::open(file_path)?;
         let mut buffer = Vec::new();
