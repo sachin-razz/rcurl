@@ -626,9 +626,31 @@ fn test_smtp_engine() {
 
 #[test]
 fn test_socks_proxy_engine() {
-    let socks = SocksProxyEngine::new("127.0.0.1".to_string(), 1080);
+    use rcurl::modules::socks::AdvancedProxyEngine;
+
+    let socks = SocksProxyEngine::new("127.0.0.1", 1080);
     assert_eq!(socks.proxy_port, 1080);
-    assert_eq!(SocksProxyEngine::build_socks5_greeting(), [0x05, 0x01, 0x00]);
+    assert_eq!(SocksProxyEngine::build_socks5_greeting(&[0x00]), vec![0x05, 0x01, 0x00]);
+
+    // Test SOCKS5 connect request frame
+    let req_frame = SocksProxyEngine::build_socks5_connect_request("example.com", 443);
+    assert_eq!(&req_frame[0..4], &[0x05, 0x01, 0x00, 0x03]);
+
+    // Test Proxy Pool Load Balancing Sequence
+    let pool = AdvancedProxyEngine::new(vec!["proxy1:8080".to_string(), "proxy2:8080".to_string()]);
+    assert_eq!(pool.select_next_proxy(), Some("proxy1:8080".to_string()));
+    assert_eq!(pool.select_next_proxy(), Some("proxy2:8080".to_string()));
+    assert_eq!(pool.select_next_proxy(), Some("proxy1:8080".to_string()));
+
+    // Test HTTP CONNECT Tunneling Header
+    let tunnel = AdvancedProxyEngine::build_http_connect_tunnel("secure.domain.com", 443, Some("admin:secret"));
+    assert!(tunnel.starts_with("CONNECT secure.domain.com:443 HTTP/1.1"));
+    assert!(tunnel.contains("Proxy-Authorization: Basic"));
+
+    // Test NO_PROXY Bypass Matching
+    assert!(AdvancedProxyEngine::should_bypass_proxy("localhost", "127.0.0.1, localhost, .internal.com"));
+    assert!(AdvancedProxyEngine::should_bypass_proxy("api.internal.com", "127.0.0.1, .internal.com"));
+    assert!(!AdvancedProxyEngine::should_bypass_proxy("public.com", "127.0.0.1, .internal.com"));
 }
 
 #[test]

@@ -56,7 +56,7 @@ impl CurlEngine {
             builder = builder.http2_prior_knowledge();
         }
 
-        // Configure Proxy (support -x, --proxy, --socks5, --socks5-hostname, --proxy-user / -U)
+        // Configure Proxy (support -x, --proxy, --socks5, --socks5-hostname, --proxy-user / -U, --proxy-header)
         if let Some(ref proxy_url) = cli.proxy.as_ref().or(cli.socks5.as_ref()).or(cli.socks5_hostname.as_ref()) {
             let p_str = if proxy_url.contains("://") {
                 proxy_url.to_string()
