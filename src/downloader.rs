@@ -237,15 +237,6 @@ impl CurlEngine {
             println!("{} File Destination : {}", "[LOG]".bold().magenta(), path.display().to_string().cyan());
             println!("{} Total Size       : {} bytes", "[LOG]".bold().magenta(), total_size.to_string().bold());
             println!("{} Worker Threads   : {}", "[LOG]".bold().magenta(), num_threads.to_string().bold().yellow());
-            if cli.ultraheavy {
-                println!(
-                    "{} Master Engine   : {}",
-                    "[LOG]".bold().magenta(),
-                    "ULTRAHEAVY (UltraCDC + TurboQuant + MCTS UCT + SubQ + PolarQuant)"
-                        .bold()
-                        .magenta()
-                );
-            }
         }
 
         if let Some(parent) = path.parent() {
@@ -401,53 +392,6 @@ impl CurlEngine {
         let speed_mbps = (total_size as f64 / 1_048_576.0) / elapsed.max(0.001);
 
         let (sha256_res, md5_res, comp_sha, comp_md5) = Self::verify_file_hashes(path, cli).await?;
-
-        if cli.ultraheavy || cli.fastcdc || cli.ultracdc || cli.turboquant || cli.subq || cli.polarquant || cli.mcts_router {
-            if let Ok((_chunks, merkle_root)) = crate::modules::ultracdc::UltraCdcEngine::default().chunk_file(path) {
-                if !cli.silent && !cli.json_output {
-                    println!(
-                        "{} UltraCDC Merkle-DAG Root: {}",
-                        "⚡ CDC ENGINE:".bold().magenta(),
-                        merkle_root.bold().yellow()
-                    );
-                }
-            }
-
-            if let Ok(data) = tokio::fs::read(path).await {
-                let quantizer = crate::modules::mcts_quant::TurboQuantEngine::new(16);
-                let packed = quantizer.quantize_4bit(&data);
-
-                let polar = crate::modules::polar_subq::PolarQuantEngine::default();
-                let (_mags, angles) = polar.quantize_polar_coordinates(&data);
-
-                let subq = crate::modules::polar_subq::SubQEngine::default();
-                let pq_indices = subq.encode_product_quantization(&data);
-
-                let mut router = crate::modules::mcts_quant::MctsChunkRouter::new(1000);
-                let sample_latencies = vec![12.5, 45.0, 18.0, 95.0];
-                let optimal_route = router.select_optimal_route(&sample_latencies);
-
-                if !cli.silent && !cli.json_output {
-                    println!(
-                        "{} FWHT 4-bit Bit-Packed Size: {} bytes (Orig: {} bytes, 50% Reduction)",
-                        "⚡ TURBOQUANT:".bold().cyan(),
-                        packed.len().to_string().green(),
-                        data.len().to_string().yellow()
-                    );
-                    println!(
-                        "{} Polar Angles: {} bins | SubQ Product Quantization: {} centroids",
-                        "⚡ POLAR & SUBQ:".bold().blue(),
-                        angles.len().to_string().green(),
-                        pq_indices.len().to_string().yellow()
-                    );
-                    println!(
-                        "{} MCTS UCT Tree Search Converged Route: Node #{}",
-                        "⚡ MCTS ROUTER:".bold().green(),
-                        optimal_route.to_string().bold().yellow()
-                    );
-                }
-            }
-        }
 
         if cli.json_output {
             let tele = TransferTelemetry {
