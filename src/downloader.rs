@@ -719,12 +719,133 @@ impl CurlEngine {
             md5_hasher.update(&buffer[..n]);
         }
 
-        let comp_sha = hex::encode(sha256_hasher.finalize());
-        let comp_md5 = hex::encode(md5_hasher.finalize());
+        let comp_sha = format!("{:x}", sha256_hasher.finalize());
+        let comp_md5 = format!("{:x}", md5_hasher.finalize());
 
-        let sha_verified = cli.sha256.as_ref().map(|exp| exp.eq_ignore_ascii_case(&comp_sha));
-        let md5_verified = cli.md5.as_ref().map(|exp| exp.eq_ignore_ascii_case(&comp_md5));
+        let sha256_match = cli.sha256.as_ref().map(|expected| expected.eq_ignore_ascii_case(&comp_sha));
+        let md5_match = cli.md5.as_ref().map(|expected| expected.eq_ignore_ascii_case(&comp_md5));
 
-        Ok((sha_verified, md5_verified, Some(comp_sha), Some(comp_md5)))
+        Ok((sha256_match, md5_match, Some(comp_sha), Some(comp_md5)))
     }
+}
+
+pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
+    let parsed_url = reqwest::Url::parse(url).context("Invalid URL format")?;
+    let host = parsed_url.host_str().ok_or_else(|| anyhow::anyhow!("Missing hostname in URL"))?;
+    let scheme = parsed_url.scheme();
+
+    let default_port = match scheme {
+        "ftp" | "ftps" => 21,
+        "rtsp" => 554,
+        "smb" => 445,
+        "telnet" => 23,
+        "tftp" => 69,
+        "imap" => 143,
+        "pop3" => 110,
+        "mqtt" => 1883,
+        _ => anyhow::bail!("Unsupported protocol scheme: {}", scheme),
+    };
+    let port = parsed_url.port().unwrap_or(default_port);
+    let addr = format!("{}:{}", host, port);
+
+    if scheme == "tftp" {
+        use tokio::net::UdpSocket;
+        let socket = UdpSocket::bind("0.0.0.0:0").await?;
+        socket.connect(&addr).await?;
+        let filename = parsed_url.path().trim_start_matches('/');
+        let rrq = crate::modules::tftp::TftpProtocolEngine::build_request_packet(
+            crate::modules::tftp::TftpOpcode::Rrq, filename, "octet"
+        );
+        socket.send(&rrq).await?;
+        let mut buf = [0u8; 1024];
+        let (len, _) = socket.recv_from(&mut buf).await?;
+        write_output_bytes(&buf[..len], cli).await?;
+        return Ok(());
+    }
+
+    use tokio::net::TcpStream;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let mut stream = TcpStream::connect(&addr).await
+        .with_context(|| format!("Failed to connect to {} server at {}", scheme.to_uppercase(), addr))?;
+
+    let mut response_bytes = Vec::new();
+
+    match scheme {
+        "ftp" | "ftps" => {
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+            let user = cli.user_auth.as_deref().unwrap_or("anonymous:guest");
+            let user_cmd = format!("USER {}\r\n", user.split(':').next().unwrap_or("anonymous"));
+            stream.write_all(user_cmd.as_bytes()).await?;
+            let len2 = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len2]);
+        }
+        "rtsp" => {
+            let mut rtsp = crate::modules::rtsp::RtspProtocolEngine::new();
+            let req_str = rtsp.format_describe(url);
+            stream.write_all(req_str.as_bytes()).await?;
+            let mut buf = [0u8; 2048];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+        }
+        "smb" => {
+            let mut smb = crate::modules::smb::SmbProtocolEngine::new();
+            let req = smb.build_negotiate_request();
+            stream.write_all(&req).await?;
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+        }
+        "telnet" => {
+            let do_echo = crate::modules::telnet::TelnetProtocolEngine::build_do(1);
+            stream.write_all(&do_echo).await?;
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+        }
+        "imap" => {
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+            let mut imap = crate::modules::imap::ImapProtocolEngine::new();
+            let cmd = imap.format_fetch_headers("1:*");
+            stream.write_all(cmd.as_bytes()).await?;
+            let len2 = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len2]);
+        }
+        "pop3" => {
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+            let pop3 = crate::modules::pop3::Pop3ProtocolEngine::new();
+            let cmd = pop3.format_list(None);
+            stream.write_all(cmd.as_bytes()).await?;
+            let len2 = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len2]);
+        }
+        "mqtt" => {
+            let connect_pkt = crate::modules::mqtt::MqttProtocolEngine::build_connect_packet("rcurl", 60);
+            stream.write_all(&connect_pkt).await?;
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+        }
+        _ => {}
+    }
+
+    write_output_bytes(&response_bytes, cli).await?;
+    Ok(())
+}
+
+async fn write_output_bytes(data: &[u8], cli: &Cli) -> Result<()> {
+    if let Some(ref out_path) = cli.output {
+        tokio::fs::write(out_path, data).await.context("Failed to write output file")?;
+    } else {
+        use tokio::io::AsyncWriteExt;
+        let mut stdout = tokio::io::stdout();
+        stdout.write_all(data).await.context("Failed to write to stdout")?;
+    }
+    Ok(())
 }
