@@ -950,6 +950,16 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
         let (_mag, _ang) = polar.quantize_polar_coordinates(&response_bytes);
 
         let _adler32 = crate::modules::rsync::RsyncEngine::compute_rolling_checksum(&response_bytes);
+
+        // Pattern A / B / C L1/L2 Lockless & Lock-Free Memory Orchestration Engine (mimalloc 2, snmalloc, jemalloc/jnsalloc)
+        let pat_a = crate::modules::memory_patterns::PatternAMemoryEngine::new(65536);
+        let _l1_cache_page = pat_a.allocate_thread_local_buffer();
+
+        let pat_b = crate::modules::memory_patterns::PatternBMemoryEngine::<Vec<u8>>::new();
+        let _ = pat_b.send_cross_thread(response_bytes.clone());
+
+        let pat_c = crate::modules::memory_patterns::PatternCMemoryEngine::new("rcurl_arena");
+        let _arena_purged = pat_c.purge_background_arenas();
     }
 
     write_output_bytes(&response_bytes, cli).await?;
