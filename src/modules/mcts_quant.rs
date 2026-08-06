@@ -151,6 +151,22 @@ impl TurboQuantEngine {
 
         self.quantize_4bit(&rescaled)
     }
+
+    /// Decompress vector buffer and apply IFWHT transform
+    pub fn decompress_vector(&self, packed: &[u8], original_len: usize) -> Vec<u8> {
+        let unpacked = self.dequantize_4bit(packed, original_len);
+        let mut floats: Vec<f32> = unpacked.iter().map(|&b| b as f32).collect();
+        let target_len = floats.len().next_power_of_two();
+        floats.resize(target_len, 0.0);
+
+        ifwht_transform(&mut floats);
+
+        floats
+            .iter()
+            .take(original_len)
+            .map(|&f| (f.abs().clamp(0.0, 255.0)) as u8)
+            .collect()
+    }
 }
 
 /// MCTS Node for UCT Multi-Path Network Stream Tree Search
@@ -233,11 +249,11 @@ impl MctsChunkRouter {
         for _ in 0..self.num_simulations {
             let parent_visits = self.nodes[0].visits;
 
-            // UCT Selection
+            // UCT Selection iterating through root node's children vector
             let mut best_child_idx = 1;
             let mut best_uct = -1.0;
 
-            for child_idx in 1..=num_paths {
+            for &child_idx in &self.nodes[0].children {
                 let uct = self.uct_value(parent_visits.max(1), &self.nodes[child_idx]);
                 if uct > best_uct {
                     best_uct = uct;
