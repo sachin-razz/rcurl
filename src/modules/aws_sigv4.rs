@@ -60,21 +60,45 @@ impl AwsSigV4Signer {
         sig_bytes.iter().map(|b| format!("{:02x}", b)).collect()
     }
 
-    /// Compute dynamic short date (YYYYMMDD) and ISO8601 UTC timestamp (YYYYMMDDTHHMMSSZ) from system time
+    /// Compute dynamic short date (YYYYMMDD) and ISO8601 UTC timestamp (YYYYMMDDTHHMMSSZ) using calendar-correct Gregorian date math
     pub fn get_current_utc_timestamps() -> (String, String) {
         let now = std::time::SystemTime::now();
         let dur = now.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
 
-        let days = dur / 86400;
-        let secs_of_day = dur % 86400;
+        let secs_per_day = 86400;
+        let mut days = (dur / secs_per_day) as i64;
+        let secs_of_day = dur % secs_per_day;
         let hours = secs_of_day / 3600;
         let minutes = (secs_of_day % 3600) / 60;
         let seconds = secs_of_day % 60;
 
-        let year = 1970 + (days / 365);
-        let day_of_year = days % 365;
-        let month = ((day_of_year / 30) + 1).min(12);
-        let day = ((day_of_year % 30) + 1).min(31);
+        let mut year = 1970;
+        loop {
+            let leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+            let days_in_year = if leap { 366 } else { 365 };
+            if days < days_in_year {
+                break;
+            }
+            days -= days_in_year;
+            year += 1;
+        }
+
+        let leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+        let days_in_months = [
+            31,
+            if leap { 29 } else { 28 },
+            31, 30, 31, 30, 31, 31, 30, 31, 30, 31,
+        ];
+
+        let mut month = 1;
+        for &dim in &days_in_months {
+            if days < dim {
+                break;
+            }
+            days -= dim;
+            month += 1;
+        }
+        let day = days + 1;
 
         let date_short = format!("{:04}{:02}{:02}", year, month, day);
         let date_full = format!("{:04}{:02}{:02}T{:02}{:02}{:02}Z", year, month, day, hours, minutes, seconds);

@@ -90,6 +90,19 @@ fn main() -> Result<()> {
 }
 
 async fn run_app(cli: Cli) -> Result<()> {
+    if cli.mitm_proxy {
+        let proxy_port = cli.port.unwrap_or(8080);
+        let mitm_daemon = rcurl::modules::mitm_proxy::MitmProxyDaemon::new(proxy_port);
+        println!(
+            "{} TLS MITM Proxy Daemon active on http://{}",
+            "🔒 [MITM PROXY]".bold().green(),
+            mitm_daemon.listen_address()
+        );
+        if cli.urls.is_empty() {
+            return Ok(());
+        }
+    }
+
     if cli.urls.is_empty() && cli.input_file.is_none() {
         eprintln!("rcurl: no URL specified");
         eprintln!("Try 'rcurl --help' for more information.");

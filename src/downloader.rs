@@ -625,7 +625,48 @@ impl CurlEngine {
         }
 
         let response = req.send().await.context("Failed to send HTTP request")?;
-        let status = response.status();
+        let mut status = response.status();
+
+        let response = if status == reqwest::StatusCode::UNAUTHORIZED && (cli.digest || effective_user_auth.is_some()) {
+            if let Some(auth_hdr) = response.headers().get("WWW-Authenticate") {
+                if let Ok(hdr_str) = auth_hdr.to_str() {
+                    if let Some((realm, nonce)) = crate::modules::vauth::digest::DigestAuth::parse_www_authenticate_challenge(hdr_str) {
+                        if let Some((u, p)) = effective_user_auth.as_deref().and_then(|a| a.split_once(':')) {
+                            let cnonce = format!("{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
+                            let uri = reqwest::Url::parse(url).ok().map(|u| u.path().to_string()).unwrap_or_else(|| "/".to_string());
+                            let digest_header = crate::modules::vauth::digest::DigestAuth::build_digest_header(
+                                u, p, &realm, &nonce, &method, &uri, &cnonce, "00000001", "auth"
+                            );
+                            let mut retry_req = match method.as_str() {
+                                "POST" => self.client.post(url),
+                                "PUT" => self.client.put(url),
+                                "DELETE" => self.client.delete(url),
+                                "PATCH" => self.client.patch(url),
+                                "HEAD" => self.client.head(url),
+                                _ => self.client.get(url),
+                            };
+                            retry_req = retry_req.header("Authorization", digest_header);
+                            if let Some(ref ua_val) = cli.user_agent {
+                                retry_req = retry_req.header(USER_AGENT, ua_val);
+                            }
+                            let retry_resp = retry_req.send().await.context("Failed to send Digest retry request")?;
+                            status = retry_resp.status();
+                            retry_resp
+                        } else {
+                            response
+                        }
+                    } else {
+                        response
+                    }
+                } else {
+                    response
+                }
+            } else {
+                response
+            }
+        } else {
+            response
+        };
 
         if cli.verbose && !cli.json_output {
             eprintln!("{} {}", "<".green().bold(), status);
@@ -909,6 +950,33 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
                 anyhow::bail!("FTP User rejected: {}", u_resp.trim());
             }
 
+            // Execute PASV command to open separate data connection stream
+            stream.write_all(b"PASV\r\n").await?;
+            let len_pasv = stream.read(&mut buf).await?;
+            let pasv_resp = String::from_utf8_lossy(&buf[..len_pasv]);
+
+            let mut data_stream = if pasv_resp.starts_with("227") {
+                // Parse 227 Entering Passive Mode (h1,h2,h3,h4,p1,p2)
+                let pasv_data = pasv_resp.find('(').and_then(|start| {
+                    pasv_resp.find(')').map(|end| &pasv_resp[start + 1..end])
+                });
+
+                if let Some(coords) = pasv_data {
+                    let parts: Vec<u16> = coords.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+                    if parts.len() == 6 {
+                        let data_ip = format!("{}.{}.{}.{}", parts[0], parts[1], parts[2], parts[3]);
+                        let data_port = (parts[4] << 8) + parts[5];
+                        TcpStream::connect(format!("{}:{}", data_ip, data_port)).await.ok()
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
             let filename = parsed_url.path().trim_start_matches('/');
             let retr_cmd = if filename.is_empty() { "NLST\r\n".to_string() } else { format!("RETR {}\r\n", filename) };
             stream.write_all(retr_cmd.as_bytes()).await?;
@@ -916,7 +984,13 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
             let r_resp = String::from_utf8_lossy(&buf[..len4]);
 
             response_bytes.clear();
-            if r_resp.starts_with("150") || r_resp.starts_with("125") || r_resp.starts_with("200") {
+            if let Some(ref mut d_stream) = data_stream {
+                loop {
+                    let n = d_stream.read(&mut buf).await?;
+                    if n == 0 { break; }
+                    response_bytes.extend_from_slice(&buf[..n]);
+                }
+            } else if r_resp.starts_with("150") || r_resp.starts_with("125") || r_resp.starts_with("200") {
                 loop {
                     let n = stream.read(&mut buf).await?;
                     if n == 0 { break; }

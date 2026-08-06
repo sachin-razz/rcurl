@@ -1144,9 +1144,23 @@ async fn test_e2e_live_ftp_protocol_flow() {
 
         let n3 = socket.read(&mut buf).await.unwrap();
         let cmd3 = String::from_utf8_lossy(&buf[..n3]);
-        assert!(cmd3.starts_with("RETR file.txt"));
+        assert!(cmd3.starts_with("PASV"));
+        
+        // Bind PASV data listener
+        let data_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let data_port = data_listener.local_addr().unwrap().port();
+        let p1 = data_port >> 8;
+        let p2 = data_port & 0xFF;
+
+        socket.write_all(format!("227 Entering Passive Mode (127,0,0,1,{},{}).\r\n", p1, p2).as_bytes()).await.unwrap();
+
+        let n4 = socket.read(&mut buf).await.unwrap();
+        let cmd4 = String::from_utf8_lossy(&buf[..n4]);
+        assert!(cmd4.starts_with("RETR file.txt"));
         socket.write_all(b"150 Opening BINARY mode data connection.\r\n").await.unwrap();
-        socket.write_all(b"REAL_FTP_FILE_CONTENTS_12345").await.unwrap();
+
+        let (mut data_socket, _) = data_listener.accept().await.unwrap();
+        data_socket.write_all(b"REAL_FTP_FILE_CONTENTS_12345").await.unwrap();
     });
 
     use clap::Parser;
