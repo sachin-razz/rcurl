@@ -639,7 +639,7 @@ fn test_cares_dns_engine() {
 
 #[test]
 fn test_ssh_engine() {
-    let auth_req = SshEngine::format_ssh_auth_request("root");
+    let auth_req = SshEngine::format_ssh_auth_request("root", "ssh-connection", "publickey");
     assert!(auth_req.contains("user: root"));
     assert!(auth_req.contains("publickey"));
 }

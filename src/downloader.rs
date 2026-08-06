@@ -789,6 +789,7 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
 
     let default_port = match scheme {
         "ftp" | "ftps" => 21,
+        "ssh" | "scp" | "sftp" => 22,
         "rtsp" => 554,
         "smb" => 445,
         "telnet" => 23,
@@ -825,6 +826,22 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
     let mut response_bytes = Vec::new();
 
     match scheme {
+        "ssh" | "scp" | "sftp" => {
+            let banner = crate::modules::vssh::ssh::SshEngine::build_ssh_identification_banner("1.0.0");
+            stream.write_all(&banner).await?;
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+            let user = cli.user_auth.as_deref().unwrap_or("root:pass").split(':').next().unwrap_or("root");
+            let auth_cmd = crate::modules::vssh::ssh::SshEngine::format_ssh_auth_request(user, "ssh-connection", "publickey");
+            stream.write_all(auth_cmd.as_bytes()).await?;
+            if scheme == "sftp" {
+                let init = crate::modules::vssh::ssh::SshEngine::format_sftp_init(3);
+                stream.write_all(&init).await?;
+                let len2 = stream.read(&mut buf).await?;
+                response_bytes.extend_from_slice(&buf[..len2]);
+            }
+        }
         "ftp" | "ftps" => {
             let mut buf = [0u8; 1024];
             let len = stream.read(&mut buf).await?;
