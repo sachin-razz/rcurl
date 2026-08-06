@@ -364,7 +364,7 @@ impl CurlEngine {
                 let mut offset = start;
                 #[allow(unused_variables)]
                 let chunk_start_time = Instant::now();
-                #[allow(unused_variables, unused_mut)]
+                #[allow(unused_variables, unused_mut, unused_assignments)]
                 let mut bytes_downloaded_worker = 0u64;
 
                 #[cfg(unix)]
