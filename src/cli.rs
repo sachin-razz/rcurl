@@ -381,8 +381,8 @@ pub struct Cli {
     #[arg(long = "dry-run")]
     pub dry_run: bool,
 
-    /// Copy files whole without delta transfer (Rsync --whole-file)
-    #[arg(long = "whole-file")]
+    /// Copy files whole without delta transfer (Rsync -W / --whole-file)
+    #[arg(short = 'W', long = "whole-file")]
     pub whole_file: bool,
 
     /// Update destination files in-place (Rsync --inplace)

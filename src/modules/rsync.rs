@@ -40,6 +40,17 @@ pub struct RsyncEngine {
     pub remove_source: bool,
     pub list_only: bool,
     pub use_adler_md5: bool,
+    pub checksum_mode: bool,
+    pub itemize_changes: bool,
+    pub stats: bool,
+    pub delay_updates: bool,
+    pub partial: bool,
+    pub partial_dir: Option<PathBuf>,
+    pub prune_empty_dirs: bool,
+    pub chmod_mode: Option<String>,
+    pub chown_mapping: Option<String>,
+    pub numeric_ids: bool,
+    pub bwlimit: Option<u64>,
 }
 
 impl Default for RsyncEngine {
@@ -58,6 +69,17 @@ impl Default for RsyncEngine {
             remove_source: false,
             list_only: false,
             use_adler_md5: true,
+            checksum_mode: false,
+            itemize_changes: false,
+            stats: false,
+            delay_updates: false,
+            partial: false,
+            partial_dir: None,
+            prune_empty_dirs: false,
+            chmod_mode: None,
+            chown_mapping: None,
+            numeric_ids: false,
+            bwlimit: None,
         }
     }
 }
@@ -66,6 +88,35 @@ impl Default for RsyncEngine {
 impl RsyncEngine {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub fn from_cli(cli: &crate::cli::Cli) -> Self {
+        Self {
+            block_size: 4096,
+            archive_mode: cli.archive,
+            compress: cli.compress,
+            delete_extraneous: cli.delete_extraneous,
+            dry_run: cli.dry_run,
+            whole_file: cli.whole_file,
+            inplace: cli.inplace,
+            backup: cli.backup,
+            backup_dir: cli.backup_dir.as_ref().map(PathBuf::from),
+            backup_suffix: cli.suffix.clone().unwrap_or_else(|| "~".to_string()),
+            remove_source: cli.remove_source_files,
+            list_only: cli.list_only,
+            use_adler_md5: true,
+            checksum_mode: cli.checksum_check,
+            itemize_changes: cli.itemize_changes,
+            stats: cli.stats,
+            delay_updates: cli.delay_updates,
+            partial: cli.partial,
+            partial_dir: cli.partial_dir.as_ref().map(PathBuf::from),
+            prune_empty_dirs: cli.prune_empty_dirs,
+            chmod_mode: cli.chmod_mode.clone(),
+            chown_mapping: cli.chown_mapping.clone(),
+            numeric_ids: cli.numeric_ids,
+            bwlimit: cli.bwlimit,
+        }
     }
 
     /// Compute Adler-32 rolling checksum for rsync delta matching (RFC 1950 & rsync spec: s1 initializes to 1)

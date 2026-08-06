@@ -1355,7 +1355,7 @@ async fn test_e2e_digest_auth_actually_retries_the_real_download_request() {
 }
 
 #[tokio::test]
-async fn mitm_proxy_daemon_picks_a_real_free_port_and_starts_listening() {
+async fn test_mitm_proxy_daemon_picks_a_real_free_port_and_starts_listening() {
     use rcurl::modules::mitm_proxy::MitmProxyDaemon;
     use std::net::TcpListener;
 
@@ -1369,4 +1369,62 @@ async fn mitm_proxy_daemon_picks_a_real_free_port_and_starts_listening() {
 
     let dial = tokio::net::TcpStream::connect(daemon.listen_address()).await;
     assert!(dial.is_ok(), "MitmProxyDaemon must actively accept TCP connections on its listen address");
+}
+
+#[test]
+fn test_rsync_from_cli_options() {
+    use clap::Parser;
+    use rcurl::cli::Cli;
+    use rcurl::modules::rsync::RsyncEngine;
+
+    let cli = Cli::parse_from(vec![
+        "rcurl", "--archive", "--compress", "--dry-run", "--whole-file", "--backup", "--checksum", "--delete", "--bwlimit", "5000",
+        "--backup-dir", "/tmp/backups", "--suffix", ".bak", "--remove-source-files",
+        "--list-only", "rsync://127.0.0.1/module/file.tar.gz"
+    ]);
+
+    let engine = RsyncEngine::from_cli(&cli);
+    assert!(engine.archive_mode);
+    assert!(engine.compress);
+    assert!(engine.dry_run);
+    assert!(engine.whole_file);
+    assert!(engine.backup);
+    assert!(engine.checksum_mode);
+    assert!(engine.delete_extraneous);
+    assert_eq!(engine.bwlimit, Some(5000));
+    assert_eq!(engine.backup_dir.as_deref(), Some(std::path::Path::new("/tmp/backups")));
+    assert_eq!(engine.backup_suffix, ".bak");
+    assert!(engine.remove_source);
+    assert!(engine.list_only);
+}
+
+#[tokio::test]
+async fn test_e2e_live_rsync_protocol_flow() {
+    use tokio::net::TcpListener;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = [0u8; 512];
+        let n = socket.read(&mut buf).await.unwrap();
+        let greeting = String::from_utf8_lossy(&buf[..n]);
+        assert!(greeting.starts_with("@RSYNCD:"));
+
+        socket.write_all(b"@RSYNCD: 31.0\n").await.unwrap();
+
+        let n2 = socket.read(&mut buf).await.unwrap();
+        let path = String::from_utf8_lossy(&buf[..n2]);
+        assert!(path.contains("module/file.txt"));
+        socket.write_all(b"RSYNC_FILE_TRANSFER_PAYLOAD_BYTES").await.unwrap();
+    });
+
+    use clap::Parser;
+    let url = format!("rsync://127.0.0.1:{}/module/file.txt", port);
+    let cli = rcurl::cli::Cli::parse_from(vec!["rcurl", "--archive", "--compress", "-q", &url]);
+
+    let res = rcurl::downloader::execute_native_protocol(&url, &cli).await;
+    assert!(res.is_ok());
 }

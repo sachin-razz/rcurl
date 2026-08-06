@@ -870,6 +870,7 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
     let default_port = match scheme {
         "ftp" | "ftps" => 21,
         "ssh" | "scp" | "sftp" => 22,
+        "rsync" | "rsyncd" => 873,
         "smtp" => 25,
         "rtsp" => 554,
         "smb" => 445,
@@ -923,6 +924,22 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
                 let len2 = stream.read(&mut buf).await?;
                 response_bytes.extend_from_slice(&buf[..len2]);
             }
+        }
+        "rsync" | "rsyncd" => {
+            let _rsync_engine = crate::modules::rsync::RsyncEngine::from_cli(cli);
+            let greeting = "@RSYNCD: 31.0\n";
+            stream.write_all(greeting.as_bytes()).await?;
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            let resp = String::from_utf8_lossy(&buf[..len]);
+            if !resp.starts_with("@RSYNCD:") {
+                anyhow::bail!("Rsync Daemon rejected connection: {}", resp.trim());
+            }
+
+            let path = parsed_url.path().trim_start_matches('/');
+            stream.write_all(format!("{}\n", path).as_bytes()).await?;
+            let len2 = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len2]);
         }
         "ftp" | "ftps" => {
             let mut buf = [0u8; 1024];
