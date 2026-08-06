@@ -803,3 +803,43 @@ fn ultraheavy_memory_patterns_and_16_thread_mcts_chunk_routing() {
         h.join().unwrap();
     }
 }
+
+#[test]
+fn subq_product_quantization_canonical_worked_example() {
+    use rcurl::modules::polar_subq::SubQEngine;
+
+    // Vector [10, 20, 30, 40, 50, 60, 70, 80] with m=4 sub-spaces:
+    // Sub-space 0: [10, 20] -> mean = 15
+    // Sub-space 1: [30, 40] -> mean = 35
+    // Sub-space 2: [50, 60] -> mean = 55
+    // Sub-space 3: [70, 80] -> mean = 75
+    let subq = SubQEngine::new(4);
+    let vec_data = vec![10u8, 20, 30, 40, 50, 60, 70, 80];
+    let codebook = subq.encode_product_quantization(&vec_data);
+    assert_eq!(codebook, vec![15, 35, 55, 75]);
+}
+
+#[test]
+fn polarquant_canonical_worked_example() {
+    use rcurl::modules::polar_subq::PolarQuantEngine;
+
+    // Cartesian point (x=0, y=255): r = 255, theta = pi/2 (90 deg)
+    // Angle bin for theta = pi/2 with 256 bins -> (0.25 * 255) = 63
+    let polar = PolarQuantEngine::new(256, 256);
+    let (mag, ang) = polar.quantize_polar_coordinates(&[0, 255]);
+    assert_eq!(mag, vec![255]);
+    assert_eq!(ang, vec![63]);
+}
+
+#[test]
+fn turboquant_fwht_ifwht_exact_mathematical_reconstruction() {
+    use rcurl::modules::mcts_quant::{fwht_transform, ifwht_transform};
+
+    // Vector [1.0, 1.0, 1.0, 1.0] -> FWHT -> [4.0, 0.0, 0.0, 0.0] -> IFWHT -> [1.0, 1.0, 1.0, 1.0]
+    let mut vec_data = vec![1.0f32, 1.0, 1.0, 1.0];
+    fwht_transform(&mut vec_data);
+    assert_eq!(vec_data, vec![4.0, 0.0, 0.0, 0.0]);
+
+    ifwht_transform(&mut vec_data);
+    assert_eq!(vec_data, vec![1.0, 1.0, 1.0, 1.0]);
+}
