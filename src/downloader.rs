@@ -424,8 +424,8 @@ impl CurlEngine {
                         let chunk = chunk_res?;
                         tok_file.write_all(&chunk).await?;
                         let len = chunk.len() as u64;
-                        #[allow(unused_assignments)]
                         bytes_downloaded_worker += len;
+                        let _ = bytes_downloaded_worker;
 
                         if let Some(ref cpb) = chunk_pb {
                             cpb.inc(len);
