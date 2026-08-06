@@ -202,8 +202,9 @@ impl CurlEngine {
                 if let Some((realm, nonce)) = crate::modules::vauth::digest::DigestAuth::parse_www_authenticate_challenge(www_auth) {
                     if let Some(ref auth) = cli.user_auth {
                         if let Some((u, p)) = auth.split_once(':') {
+                            let cnonce = format!("{:x}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos());
                             let digest_header = crate::modules::vauth::digest::DigestAuth::build_digest_header(
-                                u, p, &realm, &nonce, &method, url, "cnonce123", "00000001", "auth"
+                                u, p, &realm, &nonce, &method, url, &cnonce, "00000001", "auth"
                             );
                             let mut retry_req = self.client.head(url);
                             retry_req = retry_req.header("Authorization", digest_header);
@@ -491,11 +492,16 @@ impl CurlEngine {
         if let Some(ref aws_provider) = cli.aws_sigv4 {
             let payload = cli.data.as_deref().unwrap_or("").as_bytes();
             let payload_hash = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(payload);
+            let parsed_url = reqwest::Url::parse(url).ok();
+            let host_str = parsed_url.as_ref().and_then(|u| u.host_str()).unwrap_or("localhost");
+            let path_str = parsed_url.as_ref().map(|u| u.path()).unwrap_or("/");
+            let query_str = parsed_url.as_ref().and_then(|u| u.query()).unwrap_or("");
+            let canonical_headers = format!("host:{}\n", host_str);
             let canonical_req = crate::modules::aws_sigv4::AwsSigV4Signer::build_canonical_request(
-                &method, url, "", "host:aws.amazon.com", "host", &payload_hash
+                &method, path_str, query_str, &canonical_headers, "host", &payload_hash
             );
             let req_hash = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(canonical_req.as_bytes());
-            let auth_header = format!("AWS4-HMAC-SHA256 Credential={}/20260806/us-east-1/{}/aws4_request, SignedHeaders=host, Signature={}", aws_provider, aws_provider, req_hash);
+            let auth_header = format!("AWS4-HMAC-SHA256 Credential={}/us-east-1/{}/aws4_request, SignedHeaders=host, Signature={}", aws_provider, aws_provider, req_hash);
             req = req.header("Authorization", auth_header);
         }
 

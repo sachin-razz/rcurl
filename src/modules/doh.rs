@@ -13,8 +13,10 @@ impl DohResolver {
     pub fn build_dns_query_wireformat(domain: &str, qtype: u16) -> Vec<u8> {
         let mut query = Vec::with_capacity(32 + domain.len());
 
-        // 12-byte DNS Header: Transaction ID (0x1234), Standard Query Flags (0x0100)
-        query.extend_from_slice(&[0x12, 0x34, 0x01, 0x00]);
+        // 12-byte DNS Header: Dynamic Transaction ID, Standard Query Flags (0x0100)
+        let tx_id = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos() & 0xFFFF) as u16;
+        let [t1, t2] = tx_id.to_be_bytes();
+        query.extend_from_slice(&[t1, t2, 0x01, 0x00]);
         // Questions: 1, Answer RRs: 0, Authority RRs: 0, Additional RRs: 0
         query.extend_from_slice(&[0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
 
