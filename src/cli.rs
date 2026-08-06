@@ -853,6 +853,10 @@ pub struct Cli {
     #[arg(long = "retry", default_value_t = 3, value_name = "NUM")]
     pub retries: u32,
 
+    /// Force native C libcurl engine for HTTP transfers
+    #[arg(long = "libcurl", aliases = ["use-libcurl"])]
+    pub use_libcurl: bool,
+
     /// Restrict maximum download speed (e.g. --rate-limit 5M, 500K)
     #[arg(long = "rate-limit", value_name = "SPEED")]
     pub rate_limit: Option<String>,

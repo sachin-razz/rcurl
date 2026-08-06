@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod downloader;
+mod libcurl_engine;
 mod modules;
 mod pure_rust_engine;
 mod progress;
@@ -162,7 +163,9 @@ async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) -> Result<()>
         let url = url.clone();
 
         tasks.push(tokio::spawn(async move {
-            if url.starts_with("http://")
+            if cli_ref.use_libcurl {
+                crate::libcurl_engine::LibcurlEngine::execute(&url, &cli_ref)
+            } else if url.starts_with("http://")
                 || url.starts_with("https://")
                 || url.starts_with("file://")
                 || (!url.contains("://") && std::path::Path::new(&url).exists())
