@@ -56,15 +56,20 @@ impl CurlEngine {
             builder = builder.http2_prior_knowledge();
         }
 
-        // Configure Proxy (support -x, --proxy, --socks5, --socks5-hostname)
+        // Configure Proxy (support -x, --proxy, --socks5, --socks5-hostname, --proxy-user / -U)
         if let Some(ref proxy_url) = cli.proxy.as_ref().or(cli.socks5.as_ref()).or(cli.socks5_hostname.as_ref()) {
             let p_str = if proxy_url.contains("://") {
                 proxy_url.to_string()
             } else {
-                format!("socks5://{}", proxy_url)
+                format!("http://{}", proxy_url)
             };
-            let proxy = Proxy::all(&p_str)
+            let mut proxy = Proxy::all(&p_str)
                 .with_context(|| format!("Failed to configure proxy {}", p_str))?;
+            if let Some(ref p_user) = cli.proxy_auth {
+                if let Some((u, p)) = p_user.split_once(':') {
+                    proxy = proxy.basic_auth(u, p);
+                }
+            }
             builder = builder.proxy(proxy);
         }
 
