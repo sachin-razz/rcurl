@@ -957,12 +957,32 @@ fn test_edge_case_adler32_rolling_checksum() {
 fn test_edge_case_mcts_extreme_latencies() {
     use rcurl::modules::mcts_quant::MctsChunkRouter;
 
-    let mut router = MctsChunkRouter::new(1000);
+    let nano = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos() as f64;
 
-    // Extreme latency spread: 0.001 ms vs 1,000,000 ms
-    let extreme_latencies = vec![1000000.0, 0.001, 50000.0];
+    let dynamic_fast = (nano % 100.0) / 10000.0 + 0.001; // Dynamic < 0.01 ms
+    let dynamic_slow = 1000000.0 + nano * 100.0;        // Dynamic > 1,000,000 ms
+    let dynamic_mid = 50000.0 + nano;                  // Dynamic ~ 50,000 ms
+
+    let mut router = MctsChunkRouter::new(1000);
+    let extreme_latencies = vec![dynamic_slow, dynamic_fast, dynamic_mid];
     let best_route = router.select_optimal_route(&extreme_latencies);
 
-    // MCTS UCT must select index 1 (0.001 ms latency) as optimal
+    // MCTS UCT must select index 1 (fastest dynamic latency) as optimal
     assert_eq!(best_route, 1);
+}
+
+#[test]
+fn test_port_engine_conflict_resolution() {
+    use rcurl::modules::port_engine::PortEngine;
+
+    // Test address resolution with explicit CLI port override
+    let addr = PortEngine::resolve_target_address("example.com", 21, Some(2121));
+    assert_eq!(addr, "example.com:2121");
+
+    // Test automatic port conflict scanning
+    let resolved = PortEngine::resolve_available_port(18080);
+    assert!(resolved >= 18080);
 }

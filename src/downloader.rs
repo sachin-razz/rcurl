@@ -801,7 +801,8 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
         _ => anyhow::bail!("Unsupported protocol scheme: {}", scheme),
     };
     let port = parsed_url.port().unwrap_or(default_port);
-    let addr = format!("{}:{}", host, port);
+    let target_port = cli.port.unwrap_or(port);
+    let addr = crate::modules::port_engine::PortEngine::resolve_target_address(host, target_port, cli.port);
 
     if scheme == "tftp" {
         use tokio::net::UdpSocket;

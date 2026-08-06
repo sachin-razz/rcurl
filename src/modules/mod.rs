@@ -20,6 +20,7 @@ pub mod mqtt;
 pub mod multicloud;
 pub mod multicast;
 pub mod p2pmesh;
+pub mod port_engine;
 pub mod polar_subq;
 pub mod pop3;
 pub mod rrsync;

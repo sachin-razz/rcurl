@@ -960,6 +960,10 @@ pub struct Cli {
     /// Output format string (curl -w / --write-out)
     #[arg(long = "write-out", value_name = "FORMAT")]
     pub write_out: Option<String>,
+
+    /// Explicit port override for network protocols (--port)
+    #[arg(long = "port", value_name = "PORT")]
+    pub port: Option<u16>,
 }
 
 #[allow(dead_code)]
