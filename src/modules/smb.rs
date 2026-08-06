@@ -40,16 +40,21 @@ impl SmbProtocolEngine {
 
     pub fn build_negotiate_request(&mut self) -> Vec<u8> {
         let header = self.build_smb2_header(0x0000, 0);
-        let mut request = Vec::with_capacity(100);
+        let mut request = Vec::with_capacity(108);
         request.extend_from_slice(&header);
 
-        request.extend_from_slice(&[36, 0]);
-        request.extend_from_slice(&[2, 0]);
-        request.extend_from_slice(&[1, 0]);
-        request.extend_from_slice(&[0, 0, 0, 0]);
-        request.extend_from_slice(&[0; 16]);
-        request.extend_from_slice(&[0x02, 0x02]);
-        request.extend_from_slice(&[0x00, 0x03]);
+        // Fixed Negotiate Request Part (MS-SMB2 §2.2.3: StructureSize = 36 bytes)
+        request.extend_from_slice(&[36, 0]);      // StructureSize = 36 (0x0024)
+        request.extend_from_slice(&[2, 0]);       // DialectCount = 2
+        request.extend_from_slice(&[1, 0]);       // SecurityMode = 1 (SMB2_NEGOTIATE_SIGNING_ENABLED)
+        request.extend_from_slice(&[0, 0]);       // Reserved = 0
+        request.extend_from_slice(&[0, 0, 0, 0]); // Capabilities = 0
+        request.extend_from_slice(&[0; 16]);      // ClientGUID = 16 bytes
+        request.extend_from_slice(&[0; 8]);       // NegotiateContextOffset / ClientStartTime = 8 bytes
+
+        // Dialects Array (2 * 2 bytes)
+        request.extend_from_slice(&[0x02, 0x02]); // SMB 2.0.2
+        request.extend_from_slice(&[0x00, 0x03]); // SMB 3.0.0
 
         request
     }

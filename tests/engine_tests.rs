@@ -848,9 +848,11 @@ fn test_http2_and_http3_frame_encoding() {
 
     let h2_settings = Http2ProtocolEngine::build_settings_frame(4096, 100);
     assert_eq!(h2_settings[3], Http2FrameType::Settings as u8);
-
     let h3_settings = Http3ProtocolEngine::build_settings_frame(65536);
     assert_eq!(h3_settings[0], Http3FrameType::Settings as u8);
+
+    let qpack_get = Http3ProtocolEngine::qpack_static_get_method();
+    assert_eq!(qpack_get, [0xD1]);
 }
 
 #[test]
@@ -864,11 +866,12 @@ fn test_imap_pop3_rtsp_protocol_commands() {
     assert!(login_cmd.contains("LOGIN \"user\" \"pass\""));
 
     let pop3 = Pop3ProtocolEngine::new();
-    assert_eq!(pop3.format_user("admin"), "USER admin\r\n");
+    let list_cmd = pop3.format_list(None);
+    assert_eq!(list_cmd, "LIST\r\n");
 
     let mut rtsp = RtspProtocolEngine::new();
-    let setup = rtsp.format_setup("rtsp://example.com/media.mp4", "RTP/AVP;unicast");
-    assert!(setup.contains("SETUP rtsp://example.com/media.mp4 RTSP/1.0"));
+    let describe = rtsp.format_describe("rtsp://example.com/stream");
+    assert!(describe.starts_with("DESCRIBE rtsp://example.com/stream RTSP/1.0"));
 }
 
 #[test]
@@ -884,6 +887,8 @@ fn test_mqtt_smb_telnet_tftp_binary_packets() {
     let mut smb = SmbProtocolEngine::new();
     let neg = smb.build_negotiate_request();
     assert_eq!(&neg[0..4], b"\xFE\x53\x4D\x42");
+    assert_eq!(&neg[64..66], &[36, 0]); // StructureSize = 36
+    assert_eq!(&neg[100..104], &[0x02, 0x02, 0x00, 0x03]); // Dialects array offset
 
     let do_echo = TelnetProtocolEngine::build_do(0x01);
     assert_eq!(do_echo, [0xFF, 0xFD, 0x01]);
@@ -967,10 +972,15 @@ fn test_edge_case_digest_challenge_parsing() {
 fn test_edge_case_adler32_rolling_checksum() {
     use rcurl::modules::rsync::RsyncEngine;
 
-    // Single byte test
+    // RFC 1950 Adler-32 spec vector 1: Empty input returns 1
+    assert_eq!(RsyncEngine::compute_rolling_checksum(b""), 1);
+
+    // RFC 1950 Adler-32 spec vector 2: "Wikipedia" returns 0x11E60398
+    assert_eq!(RsyncEngine::compute_rolling_checksum(b"Wikipedia"), 0x11E60398);
+
+    // Single byte test: s1 = 1+65=66, s2 = 0+66=66 -> (66 << 16) | 66 = 4325442
     let chk_single = RsyncEngine::compute_rolling_checksum(b"A");
-    // s1 = (0 + 65) % 65521 = 65, s2 = (0 + 65) % 65521 = 65 -> (65 << 16) | 65 = 4259905
-    assert_eq!(chk_single, 4259905);
+    assert_eq!(chk_single, 4325442);
 
     // 64KB all 0xFF buffer modulo wrap-around test
     let large_buf = vec![0xFFu8; 65536];

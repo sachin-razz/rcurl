@@ -53,7 +53,7 @@ impl Http3ProtocolEngine {
         Self::build_frame(Http3FrameType::Settings, &payload)
     }
 
-    pub fn qpack_static_get_method() -> [u8; 2] {
-        [0x00, 0xD1]
+    pub fn qpack_static_get_method() -> [u8; 1] {
+        [0xD1]
     }
 }

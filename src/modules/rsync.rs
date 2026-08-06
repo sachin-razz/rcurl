@@ -68,9 +68,9 @@ impl RsyncEngine {
         Self::default()
     }
 
-    /// Compute Adler-32 rolling checksum for rsync delta matching
+    /// Compute Adler-32 rolling checksum for rsync delta matching (RFC 1950 & rsync spec: s1 initializes to 1)
     pub fn compute_rolling_checksum(data: &[u8]) -> u32 {
-        let mut s1: u32 = 0;
+        let mut s1: u32 = 1;
         let mut s2: u32 = 0;
         for &byte in data {
             s1 = (s1 + byte as u32) % 65521;
