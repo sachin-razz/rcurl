@@ -812,3 +812,86 @@ fn test_edge_case_bundled_wget_rsync_curl_short_flags_with_values() {
     assert_eq!(cli.rate_limit, Some("1M".to_string()));
     assert_eq!(cli.timeout, Some(120));
 }
+
+#[test]
+fn test_http2_and_http3_frame_encoding() {
+    use rcurl::modules::http2::{Http2FrameType, Http2ProtocolEngine};
+    use rcurl::modules::http3::{Http3FrameType, Http3ProtocolEngine};
+
+    let h2_preface = Http2ProtocolEngine::connection_preface();
+    assert_eq!(h2_preface, b"PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n");
+
+    let h2_settings = Http2ProtocolEngine::build_settings_frame(4096, 100);
+    assert_eq!(h2_settings[3], Http2FrameType::Settings as u8);
+
+    let h3_settings = Http3ProtocolEngine::build_settings_frame(65536);
+    assert_eq!(h3_settings[0], Http3FrameType::Settings as u8);
+}
+
+#[test]
+fn test_imap_pop3_rtsp_protocol_commands() {
+    use rcurl::modules::imap::ImapProtocolEngine;
+    use rcurl::modules::pop3::Pop3ProtocolEngine;
+    use rcurl::modules::rtsp::RtspProtocolEngine;
+
+    let mut imap = ImapProtocolEngine::new();
+    let login_cmd = imap.format_login("user", "pass");
+    assert!(login_cmd.contains("LOGIN \"user\" \"pass\""));
+
+    let pop3 = Pop3ProtocolEngine::new();
+    assert_eq!(pop3.format_user("admin"), "USER admin\r\n");
+
+    let mut rtsp = RtspProtocolEngine::new();
+    let setup = rtsp.format_setup("rtsp://example.com/media.mp4", "RTP/AVP;unicast");
+    assert!(setup.contains("SETUP rtsp://example.com/media.mp4 RTSP/1.0"));
+}
+
+#[test]
+fn test_mqtt_smb_telnet_tftp_binary_packets() {
+    use rcurl::modules::mqtt::MqttProtocolEngine;
+    use rcurl::modules::smb::SmbProtocolEngine;
+    use rcurl::modules::telnet::TelnetProtocolEngine;
+    use rcurl::modules::tftp::{TftpOpcode, TftpProtocolEngine};
+
+    let connect = MqttProtocolEngine::build_connect_packet("client-123", 60);
+    assert_eq!(connect[0], 0x10);
+
+    let mut smb = SmbProtocolEngine::new();
+    let neg = smb.build_negotiate_request();
+    assert_eq!(&neg[0..4], b"\xFE\x53\x4D\x42");
+
+    let do_echo = TelnetProtocolEngine::build_do(0x01);
+    assert_eq!(do_echo, [0xFF, 0xFD, 0x01]);
+
+    let tftp_rrq = TftpProtocolEngine::build_request_packet(TftpOpcode::Rrq, "file.txt", "octet");
+    assert_eq!(tftp_rrq[1], 1);
+}
+
+#[test]
+fn test_doh_dns_wireformat() {
+    use rcurl::modules::doh::DohResolver;
+
+    let query = DohResolver::build_dns_query_wireformat("example.com", 1);
+    assert!(query.len() > 12);
+
+    let url = DohResolver::build_doh_get_url("https://cloudflare-dns.com/dns-query", "example.com");
+    assert!(url.contains("dns="));
+}
+
+#[test]
+fn test_digest_ntlm_spnego_auth_headers() {
+    use rcurl::modules::vauth::digest::DigestAuth;
+    use rcurl::modules::vauth::ntlm::NtlmAuth;
+    use rcurl::modules::vauth::spnego::SpnegoAuth;
+
+    let digest = DigestAuth::build_digest_header(
+        "admin", "pass123", "meetic", "nonce123", "GET", "/api", "cnonce123", "00000001", "auth"
+    );
+    assert!(digest.starts_with("Digest username=\"admin\""));
+
+    let ntlm = NtlmAuth::build_ntlm_header("WORKGROUP", "DESKTOP-123");
+    assert!(ntlm.starts_with("NTLM "));
+
+    let spnego = SpnegoAuth::build_negotiate_header(b"kerberos_ticket_bytes");
+    assert!(spnego.starts_with("Negotiate "));
+}
