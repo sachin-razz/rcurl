@@ -187,7 +187,25 @@ impl CurlEngine {
             }
         }
 
-        let res = req.send().await?;
+        let mut res = req.send().await?;
+
+        if res.status() == reqwest::StatusCode::UNAUTHORIZED && cli.digest {
+            let method = "HEAD".to_string();
+            if let Some(www_auth) = res.headers().get("WWW-Authenticate").and_then(|v| v.to_str().ok()) {
+                if let Some((realm, nonce)) = crate::modules::vauth::digest::DigestAuth::parse_www_authenticate_challenge(www_auth) {
+                    if let Some(ref auth) = cli.user_auth {
+                        if let Some((u, p)) = auth.split_once(':') {
+                            let digest_header = crate::modules::vauth::digest::DigestAuth::build_digest_header(
+                                u, p, &realm, &nonce, &method, url, "cnonce123", "00000001", "auth"
+                            );
+                            let mut retry_req = self.client.head(url);
+                            retry_req = retry_req.header("Authorization", digest_header);
+                            res = retry_req.send().await?;
+                        }
+                    }
+                }
+            }
+        }
         let headers = res.headers();
 
         let length = headers
@@ -447,41 +465,20 @@ impl CurlEngine {
         };
 
         if let Some(ref auth) = cli.user_auth {
-            if cli.digest {
-                if let Some((u, p)) = auth.split_once(':') {
-                    let header_val = crate::modules::vauth::digest::DigestAuth::build_digest_header(
-                        u, p, "rcurl", "nonce", &method, url, "cnonce", "00000001", "auth"
-                    );
-                    req = req.header("Authorization", header_val);
-                }
-            } else {
-                if let Some((u, p)) = auth.split_once(':') {
-                    req = req.basic_auth(u, Some(p));
-                }
+            if let Some((u, p)) = auth.split_once(':') {
+                req = req.basic_auth(u, Some(p));
             }
         }
 
-        if cli.ntlm {
-            let header_val = crate::modules::vauth::ntlm::NtlmAuth::build_ntlm_header("WORKGROUP", "CLIENT");
-            req = req.header("Authorization", header_val);
-        } else if cli.negotiate {
-            let header_val = crate::modules::vauth::spnego::SpnegoAuth::build_negotiate_header(b"ticket");
-            req = req.header("Authorization", header_val);
-        } else if cli.aws_sigv4.is_some() {
-            let canonical = crate::modules::vauth::aws_sigv4::AwsSigV4Auth::compute_sha256_hex(b"canonical");
-            req = req.header("Authorization", format!("AWS4-HMAC-SHA256 Credential={}", canonical));
-        }
-
-        if cli.http2 || cli.http2_prior_knowledge {
-            let _h2_frame = crate::modules::http2::Http2ProtocolEngine::build_settings_frame(4096, 100);
-        }
-
-        if cli.http3 {
-            let _h3_frame = crate::modules::http3::Http3ProtocolEngine::build_settings_frame(65536);
-        }
-
-        if let Some(ref doh_ep) = cli.doh_url {
-            let _doh_url = crate::modules::doh::DohResolver::build_doh_get_url(doh_ep, "example.com");
+        if let Some(ref aws_provider) = cli.aws_sigv4 {
+            let payload = cli.data.as_deref().unwrap_or("").as_bytes();
+            let payload_hash = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(payload);
+            let canonical_req = crate::modules::aws_sigv4::AwsSigV4Signer::build_canonical_request(
+                &method, url, "", "host:aws.amazon.com", "host", &payload_hash
+            );
+            let req_hash = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(canonical_req.as_bytes());
+            let auth_header = format!("AWS4-HMAC-SHA256 Credential={}/20260806/us-east-1/{}/aws4_request, SignedHeaders=host, Signature={}", aws_provider, aws_provider, req_hash);
+            req = req.header("Authorization", auth_header);
         }
 
         if let Some(ref c_val) = cli.cookie {

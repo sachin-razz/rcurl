@@ -884,14 +884,21 @@ fn test_digest_ntlm_spnego_auth_headers() {
     use rcurl::modules::vauth::ntlm::NtlmAuth;
     use rcurl::modules::vauth::spnego::SpnegoAuth;
 
+    // Verify Digest 401 challenge header parsing
+    let challenge = DigestAuth::parse_www_authenticate_challenge("Digest realm=\"meetic\", nonce=\"nonce123\"");
+    assert_eq!(challenge, Some(("meetic".to_string(), "nonce123".to_string())));
+
     let digest = DigestAuth::build_digest_header(
         "admin", "pass123", "meetic", "nonce123", "GET", "/api", "cnonce123", "00000001", "auth"
     );
-    assert!(digest.starts_with("Digest username=\"admin\""));
+    assert_eq!(
+        digest,
+        "Digest username=\"admin\", realm=\"meetic\", nonce=\"nonce123\", uri=\"/api\", qop=auth, nc=00000001, cnonce=\"cnonce123\", response=\"526b90b55267112d8d355956698958e1\""
+    );
 
     let ntlm = NtlmAuth::build_ntlm_header("WORKGROUP", "DESKTOP-123");
-    assert!(ntlm.starts_with("NTLM "));
+    assert_eq!(ntlm, "NTLM TlRMTVNTUAABAAAAAQIIAAkACQAgAAAACwALACkAAABXT1JLR1JPVVBERVNLVE9QLTEyMw==");
 
-    let spnego = SpnegoAuth::build_negotiate_header(b"kerberos_ticket_bytes");
-    assert!(spnego.starts_with("Negotiate "));
+    let spnego = SpnegoAuth::build_negotiate_header(b"ticket");
+    assert_eq!(spnego, "Negotiate YA4GBisGAQUFAnRpY2tldA==");
 }

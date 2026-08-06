@@ -171,39 +171,9 @@ async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) -> Result<()>
                 || (!url.contains("://") && std::path::Path::new(&url).exists())
             {
                 engine.execute_request(&url, &cli_ref).await
-            } else if url.starts_with("ftp://") || url.starts_with("ftps://") {
-                let _ftp_cmd = crate::modules::ftp::FtpProtocolEngine::new(true);
-                engine.execute_request(&url, &cli_ref).await
-            } else if url.starts_with("rtsp://") {
-                let mut rtsp = crate::modules::rtsp::RtspProtocolEngine::new();
-                let _cmd = rtsp.format_describe(&url);
-                engine.execute_request(&url, &cli_ref).await
-            } else if url.starts_with("smb://") {
-                let mut smb = crate::modules::smb::SmbProtocolEngine::new();
-                let _cmd = smb.build_negotiate_request();
-                engine.execute_request(&url, &cli_ref).await
-            } else if url.starts_with("telnet://") {
-                let _cmd = crate::modules::telnet::TelnetProtocolEngine::build_do(1);
-                engine.execute_request(&url, &cli_ref).await
-            } else if url.starts_with("tftp://") {
-                let _cmd = crate::modules::tftp::TftpProtocolEngine::build_request_packet(
-                    crate::modules::tftp::TftpOpcode::Rrq, "file", "octet"
-                );
-                engine.execute_request(&url, &cli_ref).await
-            } else if url.starts_with("imap://") {
-                let mut imap = crate::modules::imap::ImapProtocolEngine::new();
-                let _cmd = imap.format_fetch_headers("1:*");
-                engine.execute_request(&url, &cli_ref).await
-            } else if url.starts_with("pop3://") {
-                let pop3 = crate::modules::pop3::Pop3ProtocolEngine::new();
-                let _cmd = pop3.format_list(None);
-                engine.execute_request(&url, &cli_ref).await
-            } else if url.starts_with("mqtt://") {
-                let _cmd = crate::modules::mqtt::MqttProtocolEngine::build_connect_packet("rcurl", 60);
-                engine.execute_request(&url, &cli_ref).await
             } else {
                 Err(anyhow!(
-                    "Unsupported or unimplemented protocol scheme for URL: '{}'. rcurl supports http://, https://, file://, ftp://, rtsp://, smb://, telnet://, tftp://, imap://, pop3://, and mqtt://.",
+                    "Unsupported or unimplemented protocol scheme for URL: '{}'. rcurl currently supports http://, https://, and file:// protocols.",
                     url
                 ))
             }

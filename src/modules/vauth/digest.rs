@@ -18,6 +18,35 @@ impl DigestAuth {
         format!("{:x}", hasher.finalize())
     }
 
+    /// Parse `WWW-Authenticate: Digest realm="...", nonce="..."` header from 401 response
+    pub fn parse_www_authenticate_challenge(header_val: &str) -> Option<(String, String)> {
+        if !header_val.to_lowercase().starts_with("digest") {
+            return None;
+        }
+        let mut realm = None;
+        let mut nonce = None;
+
+        for part in header_val["digest".len()..].split(',') {
+            let trimmed = part.trim();
+            if let Some((k, v)) = trimmed.split_once('=') {
+                let key = k.trim().to_lowercase();
+                let val = v.trim().trim_matches('"');
+                if key == "realm" {
+                    realm = Some(val.to_string());
+                } else if key == "nonce" {
+                    nonce = Some(val.to_string());
+                }
+            }
+        }
+
+        if let (Some(r), Some(n)) = (realm, nonce) {
+            Some((r, n))
+        } else {
+            None
+        }
+    }
+
+    /// Calculate RFC 7616 Digest Authorization Response Header from real server challenge
     pub fn build_digest_header(
         username: &str,
         password: &str,
