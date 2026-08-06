@@ -843,3 +843,54 @@ fn turboquant_fwht_ifwht_exact_mathematical_reconstruction() {
     ifwht_transform(&mut vec_data);
     assert_eq!(vec_data, vec![1.0, 1.0, 1.0, 1.0]);
 }
+
+// ============================================================================
+// AWS SigV4 UTC timestamp — proleptic Gregorian calendar correctness
+// ============================================================================
+
+// Ground truth comes from an independent from-scratch civil-date-from-
+// epoch-days algorithm (the standard "days_from_civil" inverse, same family
+// as Howard Hinnant's public-domain chrono algorithm) inlined directly in
+// the test below. It shares no code with
+// `AwsSigV4Signer::get_current_utc_timestamps`, so a match between the two
+// is real evidence of correctness, not a tautology.
+
+#[test]
+fn aws_sigv4_utc_timestamp_matches_an_independent_reference_calendar_calc() {
+    // Two independent (from-scratch, not shared-code) civil-date
+    // calculations of "right now" must agree, within the tiny race window
+    // between the two calls. Guard the race by snapshotting before and
+    // after and accepting either.
+    fn expected_now() -> (i64, u32, u32) {
+        let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        let days = (secs / 86400) as i64;
+        let z = days + 719468;
+        let era = if z >= 0 { z } else { z - 146096 } / 146097;
+        let doe = (z - era * 146097) as u64;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y = yoe as i64 + era * 400;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+        let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
+        let year = if m <= 2 { y + 1 } else { y };
+        (year, m, d)
+    }
+
+    let before = expected_now();
+    let (date_short, _date_full) = AwsSigV4Signer::get_current_utc_timestamps();
+    let after = expected_now();
+
+    let got_year: i64 = date_short[0..4].parse().unwrap();
+    let got_month: u32 = date_short[4..6].parse().unwrap();
+    let got_day: u32 = date_short[6..8].parse().unwrap();
+
+    let matches_before = (got_year, got_month, got_day) == before;
+    let matches_after = (got_year, got_month, got_day) == after;
+    assert!(
+        matches_before || matches_after,
+        "get_current_utc_timestamps() returned {got_year:04}-{got_month:02}-{got_day:02}, \
+         but an independent calendar calculation for 'now' gives {before:?} (or {after:?} \
+         if the second ticked over mid-test) — these must agree"
+    );
+}

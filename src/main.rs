@@ -92,7 +92,8 @@ fn main() -> Result<()> {
 async fn run_app(cli: Cli) -> Result<()> {
     if cli.mitm_proxy {
         let proxy_port = cli.port.unwrap_or(8080);
-        let mitm_daemon = rcurl::modules::mitm_proxy::MitmProxyDaemon::new(proxy_port);
+        let mut mitm_daemon = rcurl::modules::mitm_proxy::MitmProxyDaemon::new(proxy_port);
+        mitm_daemon.start_proxy_listener().await?;
         println!(
             "{} TLS MITM Proxy Daemon active on http://{}",
             "🔒 [MITM PROXY]".bold().green(),

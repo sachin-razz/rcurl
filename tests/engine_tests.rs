@@ -160,19 +160,29 @@ fn test_omni_multicast_engine() {
     assert!(nak.starts_with(b"PGM_NAK_REPAIR_"));
 }
 
-#[test]
-fn test_mitm_proxy_daemon() {
-    let daemon = MitmProxyDaemon::new(8888);
-    assert_eq!(daemon.listen_address(), "127.0.0.1:8888");
+#[tokio::test]
+async fn test_mitm_proxy_daemon() {
+    let mut daemon = MitmProxyDaemon::new(0); // Auto-bind free port
+    daemon.start_proxy_listener().await.unwrap();
+    let listen_addr = daemon.listen_address();
 
     let (ca_cert, ca_key) = MitmProxyDaemon::generate_ca_certificate();
     assert!(ca_cert.contains("BEGIN CERTIFICATE"));
     assert!(ca_key.contains("BEGIN RSA PRIVATE KEY"));
 
+    // Connect real socket to the MITM proxy listener and send CONNECT request
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::TcpStream::connect(&listen_addr).await.unwrap();
+    stream.write_all(b"CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n").await.unwrap();
+
+    let mut buf = [0u8; 512];
+    let n = stream.read(&mut buf).await.unwrap();
+    let resp = String::from_utf8_lossy(&buf[..n]);
+    assert!(resp.contains("200 Connection Established"));
+
     daemon.log_intercepted_traffic("GET", "https://example.com/api", 200).unwrap();
     let logs = daemon.active_logs.lock().unwrap();
-    assert_eq!(logs.len(), 1);
-    assert!(logs[0].contains("GET https://example.com/api -> HTTP 200"));
+    assert!(logs.iter().any(|l| l.contains("GET https://example.com/api -> HTTP 200")));
 }
 
 #[test]
@@ -1206,4 +1216,157 @@ async fn test_e2e_live_pop3_protocol_flow() {
 
     rcurl::downloader::execute_native_protocol(&url, &cli).await.unwrap();
     server_task.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_e2e_live_ftp_pasv_data_bytes_reach_the_output_file() {
+    // Strengthens test_e2e_live_ftp_protocol_flow: that test only proves the
+    // FTP control-channel command sequence is correct. This proves the
+    // *actual file bytes* delivered over the separate PASV data connection
+    // are the ones that end up on disk — the real point of "downloading a
+    // file over FTP", not just speaking the FTP protocol correctly.
+    use tokio::net::TcpListener;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let server_task = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        socket.write_all(b"220 test\r\n").await.unwrap();
+        let mut buf = [0u8; 512];
+        socket.read(&mut buf).await.unwrap(); // USER
+        socket.write_all(b"331 need pass\r\n").await.unwrap();
+        socket.read(&mut buf).await.unwrap(); // PASS
+        socket.write_all(b"230 ok\r\n").await.unwrap();
+        socket.read(&mut buf).await.unwrap(); // PASV
+
+        let data_listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let data_port = data_listener.local_addr().unwrap().port();
+        socket
+            .write_all(format!("227 Entering Passive Mode (127,0,0,1,{},{}).\r\n", data_port >> 8, data_port & 0xFF).as_bytes())
+            .await
+            .unwrap();
+
+        socket.read(&mut buf).await.unwrap(); // RETR
+        socket.write_all(b"150 opening\r\n").await.unwrap();
+
+        let (mut data_socket, _) = data_listener.accept().await.unwrap();
+        data_socket.write_all(b"EXACT_BYTES_OVER_PASV_CHANNEL").await.unwrap();
+        drop(data_socket); // close so the client's read-loop sees EOF
+    });
+
+    use clap::Parser;
+    let out_path = std::env::temp_dir().join(format!("rcurl_ftp_pasv_test_{}.bin", port));
+    let url = format!("ftp://127.0.0.1:{}/f.bin", port);
+    let cli = rcurl::cli::Cli::parse_from(vec![
+        "rcurl", "-u", "a:b", "-q", "-o", out_path.to_str().unwrap(), &url,
+    ]);
+
+    rcurl::downloader::execute_native_protocol(&url, &cli).await.unwrap();
+    server_task.await.unwrap();
+
+    let written = std::fs::read(&out_path).unwrap();
+    let _ = std::fs::remove_file(&out_path);
+    assert_eq!(written, b"EXACT_BYTES_OVER_PASV_CHANNEL", "the bytes on disk must be exactly the PASV data-channel payload, not the control-channel status text");
+}
+
+#[tokio::test]
+async fn test_e2e_digest_auth_actually_retries_the_real_download_request() {
+    // Regression test for the bug flagged across two prior audit rounds:
+    // Digest 401-challenge handling existed only in the internal HEAD probe
+    // used to decide chunking, never in the function that performs the
+    // real GET. This proves the *actual downloaded content* comes back
+    // correctly after a live 401 -> Digest retry on download_single_stream.
+    use tokio::net::TcpListener;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let server_task = tokio::spawn(async move {
+        async fn read_request(socket: &mut tokio::net::TcpStream) -> String {
+            let mut buf = vec![0u8; 4096];
+            let mut total = Vec::new();
+            loop {
+                let n = socket.read(&mut buf).await.unwrap();
+                total.extend_from_slice(&buf[..n]);
+                if total.windows(4).any(|w| w == b"\r\n\r\n") || n == 0 {
+                    break;
+                }
+            }
+            String::from_utf8_lossy(&total).to_string()
+        }
+
+        // Round 1: execute_request always does an internal HEAD probe first
+        // (to decide whether to chunk the download). Let it succeed
+        // trivially with no auth challenge — it's not what this test is
+        // checking — and keep Content-Length tiny so the parallel-chunk
+        // path never triggers (that needs > 1MB).
+        let (mut probe_socket, _) = listener.accept().await.unwrap();
+        let _probe_req = read_request(&mut probe_socket).await;
+        probe_socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").await.unwrap();
+        drop(probe_socket);
+
+        // Round 2: the real GET, with no valid credentials yet -> 401 with
+        // a Digest challenge.
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let _req1 = read_request(&mut socket).await;
+        let body = b"unauthorized";
+        let resp = format!(
+            "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Digest realm=\"test\", qop=\"auth\", nonce=\"abc123nonce\"\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        socket.write_all(resp.as_bytes()).await.unwrap();
+        socket.write_all(body).await.unwrap();
+        drop(socket);
+
+        // Round 3 (the retry): must carry a Digest Authorization header
+        // built from the realm/nonce this server actually issued.
+        let (mut socket2, _) = listener.accept().await.unwrap();
+        let req2 = read_request(&mut socket2).await;
+        // HTTP header field names are case-insensitive on the wire (reqwest
+        // sends lowercase "authorization"), so match case-insensitively.
+        let req2_lower = req2.to_lowercase();
+        assert!(req2_lower.contains("authorization: digest"), "retry request must carry a Digest Authorization header:\n{req2}");
+        assert!(req2.contains("nonce=\"abc123nonce\""), "retry must echo back the server's real nonce, not a placeholder:\n{req2}");
+        assert!(req2.contains("realm=\"test\""), "retry must echo back the server's real realm:\n{req2}");
+
+        let body2 = b"DIGEST_AUTH_SUCCEEDED_PAYLOAD";
+        let resp2 = format!("HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body2.len());
+        socket2.write_all(resp2.as_bytes()).await.unwrap();
+        socket2.write_all(body2).await.unwrap();
+    });
+
+    use clap::Parser;
+    let out_path = std::env::temp_dir().join(format!("rcurl_digest_test_{}.bin", port));
+    let url = format!("http://127.0.0.1:{}/secret", port);
+    let cli = rcurl::cli::Cli::parse_from(vec![
+        "rcurl", "--digest", "-u", "user:pass", "-q", "-o", out_path.to_str().unwrap(), &url,
+    ]);
+
+    let engine = rcurl::downloader::CurlEngine::new(&cli).unwrap();
+    engine.execute_request(&url, &cli).await.unwrap();
+    server_task.await.unwrap();
+
+    let written = std::fs::read(&out_path).unwrap();
+    let _ = std::fs::remove_file(&out_path);
+    assert_eq!(written, b"DIGEST_AUTH_SUCCEEDED_PAYLOAD", "the real download must return the content served after successful Digest auth, not the 401 body");
+}
+
+#[tokio::test]
+async fn mitm_proxy_daemon_picks_a_real_free_port_and_starts_listening() {
+    use rcurl::modules::mitm_proxy::MitmProxyDaemon;
+    use std::net::TcpListener;
+
+    let reserved = TcpListener::bind("127.0.0.1:0").unwrap();
+    let reserved_port = reserved.local_addr().unwrap().port();
+
+    let mut daemon = MitmProxyDaemon::new(reserved_port);
+    assert_ne!(daemon.port, reserved_port, "must skip a port that's genuinely in use");
+
+    daemon.start_proxy_listener().await.unwrap();
+
+    let dial = tokio::net::TcpStream::connect(daemon.listen_address()).await;
+    assert!(dial.is_ok(), "MitmProxyDaemon must actively accept TCP connections on its listen address");
 }

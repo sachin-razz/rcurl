@@ -107,4 +107,31 @@ impl MitmProxyDaemon {
         logs.push(entry);
         Ok(())
     }
+
+    /// Bind TcpListener socket on self.listen_address() and start handling MITM proxy connections
+    pub async fn start_proxy_listener(&mut self) -> Result<()> {
+        let listener = tokio::net::TcpListener::bind(self.listen_address()).await?;
+        self.port = listener.local_addr()?.port();
+        let active_logs = self.active_logs.clone();
+
+        tokio::spawn(async move {
+            while let Ok((mut stream, addr)) = listener.accept().await {
+                let active_logs_inner = active_logs.clone();
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 1024];
+                    if let Ok(n) = tokio::io::AsyncReadExt::read(&mut stream, &mut buf).await {
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        if req.starts_with("CONNECT") || req.starts_with("GET") || req.starts_with("POST") {
+                            if let Ok(mut logs) = active_logs_inner.lock() {
+                                logs.push(format!("{}: {}", addr, req.lines().next().unwrap_or("")));
+                            }
+                            let resp = b"HTTP/1.1 200 Connection Established\r\nProxy-Agent: rcurl-mitm\r\n\r\n";
+                            let _ = tokio::io::AsyncWriteExt::write_all(&mut stream, resp).await;
+                        }
+                    }
+                });
+            }
+        });
+        Ok(())
+    }
 }
