@@ -779,12 +779,18 @@ fn test_edge_case_polar_coordinates_quadrants_and_zero_vectors() {
 }
 
 #[test]
-fn test_edge_case_bundled_wget_short_flags_with_values() {
+fn test_edge_case_bundled_wget_rsync_curl_short_flags_with_values() {
     let args = vec![
         "rcurl", "-r", "-m", "-p", "-E", "-k", "--no-parent",
-        "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-        "--rate-limit=500k", "--max-time=60",
-        "https://example.com/site/"
+        "-L", "-s", "-v",
+        "-X", "POST",
+        "-H", "Authorization: Bearer token123",
+        "-H", "X-Custom-Header: value456",
+        "-u", "admin:secret",
+        "--rate-limit=1M",
+        "--max-time=120",
+        "--archive", "--compressed", "--dry-run",
+        "https://example.com/api/v1/sync"
     ];
     let cli = Box::new(Cli::try_parse_from(args).unwrap());
     assert!(cli.recursive);
@@ -793,6 +799,15 @@ fn test_edge_case_bundled_wget_short_flags_with_values() {
     assert!(cli.html_extension);
     assert!(cli.insecure);
     assert!(cli.no_parent);
-    assert_eq!(cli.rate_limit, Some("500k".to_string()));
-    assert_eq!(cli.timeout, Some(60));
+    assert!(cli.location);
+    assert!(cli.silent);
+    assert!(cli.verbose);
+    assert!(cli.archive);
+    assert!(cli.compressed);
+    assert!(cli.dry_run);
+    assert_eq!(cli.method, "POST");
+    assert_eq!(cli.headers.len(), 2);
+    assert_eq!(cli.user_auth, Some("admin:secret".to_string()));
+    assert_eq!(cli.rate_limit, Some("1M".to_string()));
+    assert_eq!(cli.timeout, Some(120));
 }
