@@ -5,9 +5,6 @@ use sha2::{Digest, Sha256};
 pub struct AwsSigV4Signer;
 
 impl AwsSigV4Signer {
-    pub fn new() -> Self {
-        Self
-    }
 
     /// Compute SHA256 hex string of payload
     pub fn hex_sha256(data: &[u8]) -> String {

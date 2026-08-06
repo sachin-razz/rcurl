@@ -313,7 +313,6 @@ impl CurlEngine {
                     None
                 };
 
-                let chunk_start_time = Instant::now();
                 let mut req = client.get(&url).header(RANGE, format!("bytes={}-{}", start, end));
                 if ultraheavy {
                     req = req.header("X-Rcurl-Engine", "ultraheavy; cdc=ultracdc; quant=turboquant,polarquant,subq; router=mcts");
@@ -509,8 +508,18 @@ impl CurlEngine {
                 &method, path_str, query_str, &canonical_headers, "host", &payload_hash
             );
             let req_hash = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(canonical_req.as_bytes());
-            let auth_header = format!("AWS4-HMAC-SHA256 Credential={}/us-east-1/{}/aws4_request, SignedHeaders=host, Signature={}", aws_provider, aws_provider, req_hash);
+            let date_str = "20260806";
+            let cred_scope = format!("{}/us-east-1/{}/aws4_request", date_str, aws_provider);
+            let _sts = crate::modules::aws_sigv4::AwsSigV4Signer::build_string_to_sign(
+                "20260806T000000Z", &cred_scope, &req_hash
+            );
+            let auth_header = format!("AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders=host, Signature={}", aws_provider, cred_scope, req_hash);
             req = req.header("Authorization", auth_header);
+        }
+
+        if let Some(ref doh_url) = cli.doh_url {
+            let host_str = reqwest::Url::parse(url).ok().and_then(|u| u.host_str().map(|s| s.to_string())).unwrap_or_else(|| "example.com".to_string());
+            let _doh_endpoint = crate::modules::doh::DohResolver::build_doh_get_url(doh_url, &host_str);
         }
 
         if let Some(ref c_val) = cli.cookie {

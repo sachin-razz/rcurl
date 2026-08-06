@@ -98,9 +98,19 @@ impl PeerWireProtocol {
         buf
     }
 
+    /// Build dynamic BitTorrent peer message packet according to BEP-0003 specification
+    pub fn build_peer_message(msg_id: u8, payload: &[u8]) -> Vec<u8> {
+        let len = (1 + payload.len()) as u32;
+        let mut msg = Vec::with_capacity(4 + 1 + payload.len());
+        msg.extend_from_slice(&len.to_be_bytes());
+        msg.push(msg_id);
+        msg.extend_from_slice(payload);
+        msg
+    }
+
     /// Build Choke / Not-Interested message for Private Leech Mode
     pub fn build_leech_choke_message(&self) -> Vec<u8> {
-        vec![0, 0, 0, 1, 0] // Length 1, Message ID 0 (Choke)
+        Self::build_peer_message(0, &[]) // Length 1, Message ID 0 (Choke)
     }
 }
 

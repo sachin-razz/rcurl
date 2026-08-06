@@ -1,13 +1,8 @@
 //! DNS-over-HTTPS (DoH) Wireformat Query Engine (RFC 8484)
 
-use anyhow::Result;
-
 pub struct DohResolver;
 
 impl DohResolver {
-    pub fn new() -> Self {
-        Self
-    }
 
     /// Build binary DNS Header & Question section for A (type 1) or AAAA (type 28) lookup
     pub fn build_dns_query_wireformat(domain: &str, qtype: u16) -> Vec<u8> {
