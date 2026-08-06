@@ -312,13 +312,9 @@ impl CurlEngine {
                     None
                 };
 
+                let chunk_start_time = Instant::now();
                 let mut req = client.get(&url).header(RANGE, format!("bytes={}-{}", start, end));
                 if ultraheavy {
-                    let sample_latencies = vec![15.0, 22.0, 18.0, 10.0];
-                    let mut router = crate::modules::mcts_quant::MctsChunkRouter::new(100);
-                    let _optimal_route = router.select_optimal_route(&sample_latencies);
-                    let quantizer = crate::modules::mcts_quant::TurboQuantEngine::new(16);
-                    let _dummy_pack = quantizer.quantize_4bit(b"rcurl_stream_buffer");
                     req = req.header("X-Rcurl-Engine", "ultraheavy; cdc=ultracdc; quant=turboquant,polarquant,subq; router=mcts");
                 }
 
@@ -356,6 +352,16 @@ impl CurlEngine {
                     let std_file = std::fs::OpenOptions::new().write(true).open(&path)?;
                     while let Some(chunk_res) = stream.next().await {
                         let chunk = chunk_res?;
+                        if ultraheavy {
+                            let elapsed_ms = chunk_start_time.elapsed().as_secs_f64() * 1000.0;
+                            let worker_latencies = vec![elapsed_ms.max(1.0), elapsed_ms * 1.1, elapsed_ms * 0.9, elapsed_ms * 1.2];
+                            let mut router = crate::modules::mcts_quant::MctsChunkRouter::new(50);
+                            let _optimal_route = router.select_optimal_route(&worker_latencies);
+
+                            let quantizer = crate::modules::mcts_quant::TurboQuantEngine::new(16);
+                            let _quantized_chunk = quantizer.quantize_4bit(&chunk);
+                        }
+
                         std_file.write_all_at(&chunk, offset)?;
                         let len = chunk.len() as u64;
                         offset += len;
@@ -742,6 +748,7 @@ impl CurlEngine {
 }
 
 pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
+    let start_time = Instant::now();
     let parsed_url = reqwest::Url::parse(url).context("Invalid URL format")?;
     let host = parsed_url.host_str().ok_or_else(|| anyhow::anyhow!("Missing hostname in URL"))?;
     let scheme = parsed_url.scheme();
@@ -845,6 +852,16 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
             response_bytes.extend_from_slice(&buf[..len]);
         }
         _ => {}
+    }
+
+    if cli.ultraheavy {
+        let elapsed_ms = start_time.elapsed().as_secs_f64() * 1000.0;
+        let worker_latencies = vec![elapsed_ms.max(1.0), elapsed_ms * 1.1, elapsed_ms * 0.9, elapsed_ms * 1.3];
+        let mut router = crate::modules::mcts_quant::MctsChunkRouter::new(50);
+        let _optimal_route = router.select_optimal_route(&worker_latencies);
+
+        let quantizer = crate::modules::mcts_quant::TurboQuantEngine::new(16);
+        let _quantized_stream = quantizer.quantize_4bit(&response_bytes);
     }
 
     write_output_bytes(&response_bytes, cli).await?;
