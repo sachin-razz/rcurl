@@ -1141,7 +1141,7 @@ async fn test_e2e_live_ftp_protocol_flow() {
         let (mut socket, _) = listener.accept().await.unwrap();
         socket.write_all(b"220 (rcurl-test-ftp 1.0)\r\n").await.unwrap();
 
-        let mut buf = [0u8; 512];
+        let mut buf = vec![0u8; 512];
         let n = socket.read(&mut buf).await.unwrap();
         let cmd = String::from_utf8_lossy(&buf[..n]);
         assert!(cmd.starts_with("USER admin"));
@@ -1193,7 +1193,7 @@ async fn test_e2e_live_pop3_protocol_flow() {
         let (mut socket, _) = listener.accept().await.unwrap();
         socket.write_all(b"+OK POP3 server ready\r\n").await.unwrap();
 
-        let mut buf = [0u8; 512];
+        let mut buf = vec![0u8; 512];
         let n = socket.read(&mut buf).await.unwrap();
         let cmd = String::from_utf8_lossy(&buf[..n]);
         assert!(cmd.starts_with("USER mailuser"));
@@ -1234,7 +1234,7 @@ async fn test_e2e_live_ftp_pasv_data_bytes_reach_the_output_file() {
     let server_task = tokio::spawn(async move {
         let (mut socket, _) = listener.accept().await.unwrap();
         socket.write_all(b"220 test\r\n").await.unwrap();
-        let mut buf = [0u8; 512];
+        let mut buf = vec![0u8; 512];
         socket.read(&mut buf).await.unwrap(); // USER
         socket.write_all(b"331 need pass\r\n").await.unwrap();
         socket.read(&mut buf).await.unwrap(); // PASS
@@ -1408,7 +1408,7 @@ async fn test_e2e_live_rsync_protocol_flow() {
 
     tokio::spawn(async move {
         let (mut socket, _) = listener.accept().await.unwrap();
-        let mut buf = [0u8; 512];
+        let mut buf = vec![0u8; 512];
         let n = socket.read(&mut buf).await.unwrap();
         let greeting = String::from_utf8_lossy(&buf[..n]);
         assert!(greeting.starts_with("@RSYNCD:"));
