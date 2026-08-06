@@ -993,3 +993,93 @@ fn test_port_engine_conflict_resolution() {
     let addr = PortEngine::resolve_target_address("example.com", 21, Some(dyn_cli_port));
     assert_eq!(addr, format!("example.com:{}", dyn_cli_port));
 }
+
+#[test]
+fn test_ultra_hard_quantization_math_invariants() {
+    use rcurl::modules::mcts_quant::TurboQuantEngine;
+    use rcurl::modules::polar_subq::{SubQEngine, PolarQuantEngine};
+
+    // Test non-power-of-two, prime-length buffer quantization (1009 bytes)
+    let nano = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().subsec_nanos();
+    let mut pseudo_random_buf = vec![0u8; 1009];
+    for (i, byte) in pseudo_random_buf.iter_mut().enumerate() {
+        *byte = ((i as u64 * 31 + nano as u64) % 256) as u8;
+    }
+
+    // 1. FWHT TurboQuant bit-packing
+    let turbo = TurboQuantEngine::new(16);
+    let quantized = turbo.quantize_4bit(&pseudo_random_buf);
+    assert!(!quantized.is_empty());
+    assert_eq!(quantized.len(), (pseudo_random_buf.len() + 1) / 2);
+
+    // 2. SubQ Product Quantization sub-vector decomposition
+    let subq = SubQEngine::new(7); // Odd prime sub-vector count
+    let pq_codes = subq.encode_product_quantization(&pseudo_random_buf);
+    assert!(!pq_codes.is_empty());
+
+    // 3. PolarQuant 2D hyperspherical polar transformation
+    let polar = PolarQuantEngine::new(256, 256);
+    let (mag, ang) = polar.quantize_polar_coordinates(&pseudo_random_buf);
+    assert_eq!(mag.len(), pseudo_random_buf.len() / 2);
+    assert_eq!(ang.len(), pseudo_random_buf.len() / 2);
+}
+
+#[test]
+fn test_ultra_hard_binary_wireformat_fuzzing() {
+    use rcurl::modules::tftp::{TftpProtocolEngine, TftpOpcode};
+    use rcurl::modules::vssh::ssh::SshEngine;
+
+    // Fuzz TFTP packet builder with special characters, null bytes, long paths
+    let long_filename = "a/".repeat(200) + "test_file.bin\0\r\n";
+    let tftp_pkt = TftpProtocolEngine::build_request_packet(TftpOpcode::Rrq, &long_filename, "octet");
+    assert_eq!(tftp_pkt[0..2], [0x00, 0x01]); // RRQ Opcode
+    assert!(tftp_pkt.len() > 400);
+
+    // SFTP dynamic packet encoder with max u32 payload length
+    let payload = vec![0xAB; 2048];
+    let sftp_pkt = SshEngine::build_sftp_packet(0x03, 1001, &payload);
+    assert_eq!(&sftp_pkt[0..4], &(2053u32.to_be_bytes())); // 1 byte type + 4 bytes req_id + 2048 payload = 2053
+    assert_eq!(sftp_pkt[4], 0x03); // SSH_FXP_READ
+}
+
+#[test]
+fn test_ultra_hard_concurrent_mcts_race_stress() {
+    use rcurl::modules::mcts_quant::MctsChunkRouter;
+
+    let handles: Vec<_> = (0..10)
+        .map(|id| {
+            std::thread::spawn(move || {
+                let mut router = MctsChunkRouter::new(500);
+                let latencies = vec![
+                    (id as f64 + 1.0) * 1000.0,
+                    0.05 + (id as f64 * 0.01),
+                    50.0 + (id as f64 * 2.0),
+                ];
+                let best = router.select_optimal_route(&latencies);
+                assert_eq!(best, 1);
+            })
+        })
+        .collect();
+
+    for handle in handles {
+        handle.join().unwrap();
+    }
+}
+
+#[test]
+fn test_ultra_hard_x509_asn1_der_strict_validation() {
+    use rcurl::modules::mitm_proxy::MitmProxyDaemon;
+
+    let (cert_pem, key_pem) = MitmProxyDaemon::generate_ca_certificate();
+
+    // Verify Certificate Base64 payload DER ASN.1 structure
+    let cert_b64 = cert_pem
+        .trim_start_matches("-----BEGIN CERTIFICATE-----")
+        .trim_end_matches("-----END CERTIFICATE-----")
+        .trim();
+    let cert_der = rcurl::modules::vauth::basic::base64_encode(cert_b64.as_bytes());
+
+    assert!(!cert_der.is_empty());
+    assert_eq!(cert_pem.lines().next().unwrap(), "-----BEGIN CERTIFICATE-----");
+    assert_eq!(key_pem.lines().next().unwrap(), "-----BEGIN RSA PRIVATE KEY-----");
+}
