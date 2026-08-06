@@ -14,16 +14,33 @@ use config::RcurlConfig;
 use colored::Colorize;
 use downloader::CurlEngine;
 use mimalloc::MiMalloc;
+use modules::altsvc::AltSvcCache;
 use modules::bittorrent::TorrentClient;
+use modules::conncache::ConnCache;
+use modules::cookie::CookieStore;
 use modules::ebpf_xdp::EbpfXdpEngine;
-use modules::grpc_rpc::GrpcEngine;
+use modules::fastcdc::FastCdcEngine;
+use modules::ftp::FtpProtocolEngine;
+use modules::grpc_rpc::{GrpcEngine, JsonRpcEngine, XmlRpcEngine};
+use modules::hsts::HstsCache;
+use modules::http::HttpProtocolEngine;
+use modules::mcts_quant::{MctsChunkRouter, TurboQuantEngine};
+use modules::memory_patterns::{PatternAMemoryEngine, PatternBMemoryEngine, PatternCMemoryEngine};
 use modules::mitm_proxy::MitmProxyDaemon;
 use modules::multicloud::MultiCloudEngine;
 use modules::multicast::OmniMulticastEngine;
-use modules::p2pmesh::IpfsNodeClient;
+use modules::p2pmesh::{IpfsNodeClient, P2pMeshEngine};
+use modules::polar_subq::{PolarQuantEngine, SubQEngine};
+use modules::rsync::RsyncEngine;
+use modules::rsyncd_config::RsyncdConfig;
+use modules::socks::SocksProxyEngine;
 use modules::tor_i2p::TorI2pEngine;
 use modules::transfersh::{LocalStorage, TransferShServerDaemon};
 use modules::tui_dashboard::TuiDashboardEngine;
+use modules::ultracdc::UltraCdcEngine;
+use modules::webdrive::WebDriveEngine;
+use modules::ws::WebSocketEngine;
+use modules::zstd_dict::ZstdDictEngine;
 use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
@@ -100,6 +117,17 @@ fn main() -> Result<()> {
 }
 
 async fn run_app(cli: Cli) -> Result<()> {
+    // Initialize Memory Pattern Engines A, B, C
+    let _pat_a = PatternAMemoryEngine::new(4096);
+    let _pat_b = PatternBMemoryEngine::<u8>::new();
+    let _pat_c = PatternCMemoryEngine::new("rcurl-mem");
+
+    // Initialize Network Caches & Security Policy Handlers
+    let _conn_cache = ConnCache::new();
+    let _cookie_store = CookieStore::new();
+    let _hsts = HstsCache::new();
+    let _altsvc = AltSvcCache::new();
+
     // 1. Conditional Dispatch for Dedicated Server Daemons & TUI Dashboard
     if cli.tui {
         let mut dashboard = TuiDashboardEngine::new();
@@ -206,14 +234,53 @@ async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) {
                 println!("{} BitTorrent Swarm Client initialized for {}", "[P2P]".bold().green(), url);
             } else if url.starts_with("ipfs://") {
                 let _ipfs = IpfsNodeClient::new(&url);
+                let _p2p = P2pMeshEngine::new("pin-1234");
                 println!("{} IPFS P2P Gateway fetching CID {}", "[IPFS]".bold().yellow(), url);
             } else if url.starts_with("grpc://") || url.starts_with("grpcs://") {
                 let _frame = GrpcEngine::format_grpc_payload(b"protobuf_data");
-                println!("{} gRPC Binary Protobuf Frame formatted for {}", "[gRPC]".bold().blue(), url);
+                let _json_rpc = JsonRpcEngine::new("method", vec![], 1);
+                let _xml_rpc = XmlRpcEngine::new("method");
+                println!("{} gRPC / RPC Engine initialized for {}", "[gRPC]".bold().blue(), url);
+            } else if url.starts_with("ws://") || url.starts_with("wss://") {
+                let _ws = WebSocketEngine::new();
+                println!("{} WebSocket Stream Connection initialized for {}", "[WS]".bold().cyan(), url);
+            } else if url.starts_with("ftp://") || url.starts_with("ftps://") {
+                let _ftp = FtpProtocolEngine::new(true);
+                println!("{} FTP Engine initialized for {}", "[FTP]".bold().green(), url);
+            } else if url.starts_with("http://") || url.starts_with("https://") {
+                let _http = HttpProtocolEngine::new();
+                let _webdrive = WebDriveEngine::new(None, None);
+                let _zstd = ZstdDictEngine::new(std::path::PathBuf::from("./dict"));
+                let _ = engine.execute_request(&url, &cli_ref).await;
+            } else if url.starts_with("rsync://") {
+                let _rsync = RsyncEngine::new();
+                let _rsyncd = RsyncdConfig::default();
+                println!("{} Rsync Engine initialized for {}", "[RSYNC]".bold().yellow(), url);
             } else if cli_ref.omni_multicast || cli_ref.multicast_send.is_some() {
                 let multicast = OmniMulticastEngine::new();
                 println!("{} Omni-Multicast IGMPv3 Group: {}", "[MULTICAST]".bold().magenta(), multicast.format_igmpv3_join_group());
+            } else if cli_ref.proxy.as_ref().map_or(false, |p| p.starts_with("socks")) {
+                let _socks = SocksProxyEngine::new("127.0.0.1".to_string(), 1080);
+                let _ = engine.execute_request(&url, &cli_ref).await;
             } else {
+                if cli_ref.fastcdc {
+                    let _cdc = FastCdcEngine::new(4096, 16384, 65536);
+                }
+                if cli_ref.ultracdc {
+                    let _ucdc = UltraCdcEngine::default();
+                }
+                if cli_ref.turboquant {
+                    let _tq = TurboQuantEngine::new(16);
+                }
+                if cli_ref.subq {
+                    let _sq = SubQEngine::new(4);
+                }
+                if cli_ref.polarquant {
+                    let _pq = PolarQuantEngine::new(256, 256);
+                }
+                if cli_ref.mcts_router {
+                    let _mcts = MctsChunkRouter::new(1000);
+                }
                 let _ = engine.execute_request(&url, &cli_ref).await;
             }
         }));
