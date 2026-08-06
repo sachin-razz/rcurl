@@ -733,3 +733,73 @@ fn parse_interval_rejects_garbage_without_panicking() {
     assert_eq!(parse_interval("abc"), None);
     assert_eq!(parse_interval("-5s"), None);
 }
+
+#[test]
+fn turboquant_handles_arbitrary_odd_and_empty_lengths_without_panicking() {
+    use rcurl::modules::mcts_quant::TurboQuantEngine;
+    let turbo = TurboQuantEngine::new(16);
+
+    // Empty input
+    assert!(turbo.quantize_4bit(b"").is_empty());
+    assert!(turbo.quantize_2bit(b"").is_empty());
+
+    // Single byte (odd)
+    let packed1 = turbo.quantize_4bit(b"X");
+    assert_eq!(packed1.len(), 1);
+    let unp1 = turbo.dequantize_4bit(&packed1, 1);
+    assert_eq!(unp1.len(), 1);
+
+    // 2-bit packing 3 bytes (remainder 3)
+    let packed_2b = turbo.quantize_2bit(b"ABC");
+    assert_eq!(packed_2b.len(), 1);
+}
+
+#[test]
+fn polarquant_handles_single_bin_and_zero_vector_boundary_conditions() {
+    use rcurl::modules::polar_subq::PolarQuantEngine;
+
+    // Boundary: single angle bin (angle_bins = 1) must not divide by zero
+    let polar_single = PolarQuantEngine::new(1, 256);
+    let (mag, ang) = polar_single.quantize_polar_coordinates(b"TEST_VECTOR_1234");
+    assert_eq!(mag.len(), 8);
+    assert_eq!(ang.len(), 8);
+
+    let deq = polar_single.dequantize_polar_coordinates(&mag, &ang, 16);
+    assert_eq!(deq.len(), 16);
+}
+
+#[test]
+fn subq_handles_more_subspaces_than_input_bytes_cleanly() {
+    use rcurl::modules::polar_subq::SubQEngine;
+
+    let subq = SubQEngine::new(32); // 32 subspaces for 4-byte input
+    let codes = subq.encode_product_quantization(b"DATA");
+    assert!(!codes.is_empty());
+
+    let decoded = subq.decode_product_quantization(&codes, 4);
+    assert_eq!(decoded.len(), 4);
+}
+
+#[test]
+fn ultraheavy_memory_patterns_and_16_thread_mcts_chunk_routing() {
+    use rcurl::modules::mcts_quant::MctsChunkRouter;
+
+    let handles: Vec<_> = (0..16)
+        .map(|worker_id| {
+            std::thread::spawn(move || {
+                let mut router = MctsChunkRouter::new(100);
+                let latencies = vec![
+                    (worker_id as f64 + 1.0) * 10.0,
+                    0.5 + (worker_id as f64 * 0.1),
+                    100.0,
+                ];
+                let optimal = router.select_optimal_route(&latencies);
+                assert_eq!(optimal, 1);
+            })
+        })
+        .collect();
+
+    for h in handles {
+        h.join().unwrap();
+    }
+}

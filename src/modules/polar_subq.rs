@@ -109,7 +109,8 @@ impl PolarQuantEngine {
             }
 
             let r_quantized = (r.clamp(0.0, 255.0)) as u8;
-            let theta_quantized = ((theta / (2.0 * PI)) * (self.angle_bins as f64 - 1.0)) as u8;
+            let denom = (self.angle_bins as f64 - 1.0).max(1.0);
+            let theta_quantized = ((theta / (2.0 * PI)) * denom) as u8;
 
             magnitudes.push(r_quantized);
             angles.push(theta_quantized);
@@ -126,10 +127,11 @@ impl PolarQuantEngine {
         original_len: usize,
     ) -> Vec<u8> {
         let mut reconstructed = Vec::with_capacity(original_len);
+        let denom = (self.angle_bins as f64 - 1.0).max(1.0);
 
         for (&r_byte, &theta_byte) in magnitudes.iter().zip(angles.iter()) {
             let r = r_byte as f64;
-            let theta = (theta_byte as f64 / (self.angle_bins as f64 - 1.0)) * 2.0 * PI;
+            let theta = (theta_byte as f64 / denom) * 2.0 * PI;
 
             let x = (r * theta.cos()).round().clamp(0.0, 255.0) as u8;
             let y = (r * theta.sin()).round().clamp(0.0, 255.0) as u8;
