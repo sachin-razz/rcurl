@@ -626,11 +626,14 @@ fn test_smtp_engine() {
 
 #[test]
 fn test_socks_proxy_engine() {
-    use rcurl::modules::socks::AdvancedProxyEngine;
+    use rcurl::modules::socks::{AdvancedProxyEngine, Socks5AuthMethod};
 
     let socks = SocksProxyEngine::new("127.0.0.1", 1080);
     assert_eq!(socks.proxy_port, 1080);
-    assert_eq!(SocksProxyEngine::build_socks5_greeting(&[0x00]), vec![0x05, 0x01, 0x00]);
+    assert_eq!(
+        SocksProxyEngine::build_socks5_greeting(&[Socks5AuthMethod::NoAuth, Socks5AuthMethod::UserPass]),
+        vec![0x05, 0x02, 0x00, 0x02]
+    );
 
     // Test SOCKS5 connect request frame
     let req_frame = SocksProxyEngine::build_socks5_connect_request("example.com", 443);

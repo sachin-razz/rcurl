@@ -2,6 +2,27 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// RFC 1928 SOCKS5 Authentication Methods
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Socks5AuthMethod {
+    NoAuth,
+    GssApi,
+    UserPass,
+    Custom(u8),
+}
+
+impl Socks5AuthMethod {
+    pub fn to_byte(self) -> u8 {
+        match self {
+            Socks5AuthMethod::NoAuth => 0x00,
+            Socks5AuthMethod::GssApi => 0x01,
+            Socks5AuthMethod::UserPass => 0x02,
+            Socks5AuthMethod::Custom(b) => b,
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Default, Clone)]
 pub struct SocksProxyEngine {
@@ -15,12 +36,14 @@ impl SocksProxyEngine {
         Self { proxy_host: host.into(), proxy_port: port }
     }
 
-    /// Dynamically build RFC 1928 SOCKS5 Client Greeting packet with specified auth methods (0x00 NO_AUTH, 0x02 USER_PASS)
-    pub fn build_socks5_greeting(auth_methods: &[u8]) -> Vec<u8> {
-        let mut greeting = Vec::with_capacity(2 + auth_methods.len());
+    /// Dynamically build RFC 1928 SOCKS5 Client Greeting packet from strongly-typed Auth Method list
+    pub fn build_socks5_greeting(methods: &[Socks5AuthMethod]) -> Vec<u8> {
+        let mut greeting = Vec::with_capacity(2 + methods.len());
         greeting.push(0x05); // SOCKS5 Protocol Version
-        greeting.push(auth_methods.len() as u8); // Number of Auth Methods
-        greeting.extend_from_slice(auth_methods);
+        greeting.push(methods.len() as u8); // Number of Auth Methods
+        for m in methods {
+            greeting.push(m.to_byte());
+        }
         greeting
     }
 
