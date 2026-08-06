@@ -299,6 +299,7 @@ impl CurlEngine {
         };
 
         let active_rate_limit = cli.rate_limit.as_ref().or(cli.limit_rate.as_ref());
+        #[allow(unused_variables)]
         let rate_limit_bytes_per_sec = active_rate_limit.and_then(|s| parse_rate_limit(s));
         let mut tasks = Vec::new();
 
@@ -359,8 +360,11 @@ impl CurlEngine {
                 let response = req.send().await.context("Chunk request failed")?;
                 let mut stream = response.bytes_stream();
 
+                #[allow(unused_variables, unused_mut)]
                 let mut offset = start;
+                #[allow(unused_variables)]
                 let chunk_start_time = Instant::now();
+                #[allow(unused_variables, unused_mut)]
                 let mut bytes_downloaded_worker = 0u64;
 
                 #[cfg(unix)]
@@ -992,7 +996,7 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
                 });
 
                 if let Some(coords) = pasv_data {
-                    let parts: Vec<u16> = coords.split(',').filter_map(|s| s.trim().parse().ok()).collect();
+                    let parts: Vec<u16> = coords.split(',').filter_map(|s| s.trim().parse::<u16>().ok()).collect();
                     if parts.len() == 6 {
                         let data_ip = format!("{}.{}.{}.{}", parts[0], parts[1], parts[2], parts[3]);
                         let data_port = (parts[4] << 8) + parts[5];
