@@ -978,11 +978,18 @@ fn test_edge_case_mcts_extreme_latencies() {
 fn test_port_engine_conflict_resolution() {
     use rcurl::modules::port_engine::PortEngine;
 
-    // Test address resolution with explicit CLI port override
-    let addr = PortEngine::resolve_target_address("example.com", 21, Some(2121));
-    assert_eq!(addr, "example.com:2121");
+    // Dynamically bind an active socket listener on an OS-assigned ephemeral port
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let occupied_port = listener.local_addr().unwrap().port();
 
-    // Test automatic port conflict scanning
-    let resolved = PortEngine::resolve_available_port(18080);
-    assert!(resolved >= 18080);
+    // PortEngine must detect that occupied_port is blocked and resolve to an available fallback port
+    assert!(!PortEngine::is_port_available(occupied_port));
+    let resolved_port = PortEngine::resolve_available_port(occupied_port);
+    assert_ne!(resolved_port, occupied_port);
+
+    // Test explicit CLI port override address resolution with dynamic port
+    let nano = (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().subsec_nanos() % 5000) as u16;
+    let dyn_cli_port = 10000 + nano;
+    let addr = PortEngine::resolve_target_address("example.com", 21, Some(dyn_cli_port));
+    assert_eq!(addr, format!("example.com:{}", dyn_cli_port));
 }
