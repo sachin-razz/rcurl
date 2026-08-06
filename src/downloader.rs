@@ -359,8 +359,16 @@ impl CurlEngine {
                             let mut router = crate::modules::mcts_quant::MctsChunkRouter::new(50);
                             let _optimal_route = router.select_optimal_route(&worker_latencies);
 
-                            let quantizer = crate::modules::mcts_quant::TurboQuantEngine::new(16);
-                            let _quantized_chunk = quantizer.quantize_4bit(&chunk);
+                            let turbo = crate::modules::mcts_quant::TurboQuantEngine::new(16);
+                            let _quantized_chunk = turbo.quantize_4bit(&chunk);
+
+                            let subq = crate::modules::polar_subq::SubQEngine::new(4);
+                            let _pq_indices = subq.encode_product_quantization(&chunk);
+
+                            let polar = crate::modules::polar_subq::PolarQuantEngine::new(256, 256);
+                            let (_mag, _ang) = polar.quantize_polar_coordinates(&chunk);
+
+                            let _adler32 = crate::modules::rsync::RsyncEngine::compute_rolling_checksum(&chunk);
                         }
 
                         std_file.write_all_at(&chunk, offset)?;
@@ -866,8 +874,16 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
         let mut router = crate::modules::mcts_quant::MctsChunkRouter::new(50);
         let _optimal_route = router.select_optimal_route(&worker_latencies);
 
-        let quantizer = crate::modules::mcts_quant::TurboQuantEngine::new(16);
-        let _quantized_stream = quantizer.quantize_4bit(&response_bytes);
+        let turbo = crate::modules::mcts_quant::TurboQuantEngine::new(16);
+        let _quantized_stream = turbo.quantize_4bit(&response_bytes);
+
+        let subq = crate::modules::polar_subq::SubQEngine::new(4);
+        let _pq_indices = subq.encode_product_quantization(&response_bytes);
+
+        let polar = crate::modules::polar_subq::PolarQuantEngine::new(256, 256);
+        let (_mag, _ang) = polar.quantize_polar_coordinates(&response_bytes);
+
+        let _adler32 = crate::modules::rsync::RsyncEngine::compute_rolling_checksum(&response_bytes);
     }
 
     write_output_bytes(&response_bytes, cli).await?;
