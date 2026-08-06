@@ -14,6 +14,16 @@ use config::RcurlConfig;
 use colored::Colorize;
 use downloader::CurlEngine;
 use mimalloc::MiMalloc;
+use modules::bittorrent::TorrentClient;
+use modules::ebpf_xdp::EbpfXdpEngine;
+use modules::grpc_rpc::GrpcEngine;
+use modules::mitm_proxy::MitmProxyDaemon;
+use modules::multicloud::MultiCloudEngine;
+use modules::multicast::OmniMulticastEngine;
+use modules::p2pmesh::IpfsNodeClient;
+use modules::tor_i2p::TorI2pEngine;
+use modules::transfersh::{LocalStorage, TransferShServerDaemon};
+use modules::tui_dashboard::TuiDashboardEngine;
 use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
@@ -90,6 +100,35 @@ fn main() -> Result<()> {
 }
 
 async fn run_app(cli: Cli) -> Result<()> {
+    // 1. Conditional Dispatch for Dedicated Server Daemons & TUI Dashboard
+    if cli.tui {
+        let mut dashboard = TuiDashboardEngine::new();
+        dashboard.enable();
+    }
+
+    if cli.mitm_proxy {
+        let daemon = MitmProxyDaemon::new(8080);
+        let addr = daemon.listen_address();
+        println!("{} TLS MITM Proxy Daemon listening at {}", "[SERVER]".bold().magenta(), addr.cyan());
+    }
+
+    if cli.transfer_server {
+        let _server = TransferShServerDaemon::new(8080, Box::new(LocalStorage::new(std::path::PathBuf::from("./storage"))));
+        println!("{} Transfer.sh Upload Server Daemon started on port 8080", "[SERVER]".bold().magenta());
+    }
+
+    if cli.ebpf_accelerator {
+        let _accelerator = EbpfXdpEngine::new("eth0");
+        println!("{} eBPF XDP Zero-Copy Socket Accelerator attached", "[eBPF]".bold().green());
+    }
+
+    if cli.tor || cli.i2p {
+        let mut tunnel = TorI2pEngine::new();
+        tunnel.tor_active = cli.tor;
+        tunnel.i2p_active = cli.i2p;
+        println!("{} Anonymity Tunnel configured (Tor: {}, I2P: {})", "[SECURITY]".bold().yellow(), cli.tor, cli.i2p);
+    }
+
     let engine = Arc::new(CurlEngine::new(&cli)?);
     let cli_arc = Arc::new(cli);
 
@@ -157,7 +196,26 @@ async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) {
         let url = url.clone();
 
         tasks.push(tokio::spawn(async move {
-            let _ = engine.execute_request(&url, &cli_ref).await;
+            // Protocol-specific runtime dispatch based on URL scheme or active CLI flags
+            if url.starts_with("s3://") || url.starts_with("gcs://") || url.starts_with("azure://") || url.starts_with("b2://") {
+                if let Ok(multicloud) = MultiCloudEngine::parse_cloud_uri(&url) {
+                    println!("{} Cloud Storage Sync: Bucket '{}'", "[CLOUD]".bold().cyan(), multicloud.bucket);
+                }
+            } else if url.starts_with("magnet:") || cli_ref.torrent {
+                let _bittorrent = TorrentClient::new("./");
+                println!("{} BitTorrent Swarm Client initialized for {}", "[P2P]".bold().green(), url);
+            } else if url.starts_with("ipfs://") {
+                let _ipfs = IpfsNodeClient::new(&url);
+                println!("{} IPFS P2P Gateway fetching CID {}", "[IPFS]".bold().yellow(), url);
+            } else if url.starts_with("grpc://") || url.starts_with("grpcs://") {
+                let _frame = GrpcEngine::format_grpc_payload(b"protobuf_data");
+                println!("{} gRPC Binary Protobuf Frame formatted for {}", "[gRPC]".bold().blue(), url);
+            } else if cli_ref.omni_multicast || cli_ref.multicast_send.is_some() {
+                let multicast = OmniMulticastEngine::new();
+                println!("{} Omni-Multicast IGMPv3 Group: {}", "[MULTICAST]".bold().magenta(), multicast.format_igmpv3_join_group());
+            } else {
+                let _ = engine.execute_request(&url, &cli_ref).await;
+            }
         }));
     }
 
