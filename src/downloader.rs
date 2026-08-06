@@ -932,6 +932,19 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
                 anyhow::bail!("FTP Server rejected connection: {}", resp.trim());
             }
 
+            if scheme == "ftps" {
+                stream.write_all(b"AUTH TLS\r\n").await?;
+                let len_tls = stream.read(&mut buf).await?;
+                let tls_resp = String::from_utf8_lossy(&buf[..len_tls]);
+                if !tls_resp.starts_with("234") {
+                    anyhow::bail!("FTP Server rejected AUTH TLS: {}", tls_resp.trim());
+                }
+                stream.write_all(b"PBSZ 0\r\n").await?;
+                let _ = stream.read(&mut buf).await?;
+                stream.write_all(b"PROT P\r\n").await?;
+                let _ = stream.read(&mut buf).await?;
+            }
+
             let user_auth = cli.user_auth.as_deref().unwrap_or("anonymous:guest");
             let (u, p) = user_auth.split_once(':').unwrap_or((user_auth, "guest"));
             
