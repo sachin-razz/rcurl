@@ -886,27 +886,44 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
         "ftp" | "ftps" => {
             let mut buf = [0u8; 1024];
             let len = stream.read(&mut buf).await?;
-            response_bytes.extend_from_slice(&buf[..len]);
+            let resp = String::from_utf8_lossy(&buf[..len]);
+            if !resp.starts_with("220") {
+                anyhow::bail!("FTP Server rejected connection: {}", resp.trim());
+            }
+
             let user_auth = cli.user_auth.as_deref().unwrap_or("anonymous:guest");
             let (u, p) = user_auth.split_once(':').unwrap_or((user_auth, "guest"));
             
             stream.write_all(format!("USER {}\r\n", u).as_bytes()).await?;
             let len2 = stream.read(&mut buf).await?;
-            response_bytes.extend_from_slice(&buf[..len2]);
+            let u_resp = String::from_utf8_lossy(&buf[..len2]);
 
-            stream.write_all(format!("PASS {}\r\n", p).as_bytes()).await?;
-            let len3 = stream.read(&mut buf).await?;
-            response_bytes.extend_from_slice(&buf[..len3]);
+            if u_resp.starts_with("331") {
+                stream.write_all(format!("PASS {}\r\n", p).as_bytes()).await?;
+                let len3 = stream.read(&mut buf).await?;
+                let p_resp = String::from_utf8_lossy(&buf[..len3]);
+                if !p_resp.starts_with("230") {
+                    anyhow::bail!("FTP Authentication failed for user {}: {}", u, p_resp.trim());
+                }
+            } else if !u_resp.starts_with("230") {
+                anyhow::bail!("FTP User rejected: {}", u_resp.trim());
+            }
 
             let filename = parsed_url.path().trim_start_matches('/');
             let retr_cmd = if filename.is_empty() { "NLST\r\n".to_string() } else { format!("RETR {}\r\n", filename) };
             stream.write_all(retr_cmd.as_bytes()).await?;
-            
-            // Loop reading stream until EOF
-            loop {
-                let n = stream.read(&mut buf).await?;
-                if n == 0 { break; }
-                response_bytes.extend_from_slice(&buf[..n]);
+            let len4 = stream.read(&mut buf).await?;
+            let r_resp = String::from_utf8_lossy(&buf[..len4]);
+
+            response_bytes.clear();
+            if r_resp.starts_with("150") || r_resp.starts_with("125") || r_resp.starts_with("200") {
+                loop {
+                    let n = stream.read(&mut buf).await?;
+                    if n == 0 { break; }
+                    response_bytes.extend_from_slice(&buf[..n]);
+                }
+            } else {
+                response_bytes.extend_from_slice(r_resp.as_bytes());
             }
         }
         "rtsp" => {
@@ -935,19 +952,27 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
         "imap" => {
             let mut buf = [0u8; 1024];
             let len = stream.read(&mut buf).await?;
-            response_bytes.extend_from_slice(&buf[..len]);
+            let greeting = String::from_utf8_lossy(&buf[..len]);
+            if !greeting.contains("* OK") {
+                anyhow::bail!("IMAP Server rejected connection: {}", greeting.trim());
+            }
 
             let user_auth = cli.user_auth.as_deref().unwrap_or("user:pass");
             let (u, p) = user_auth.split_once(':').unwrap_or(("user", "pass"));
 
             let login_cmd = format!("A1 LOGIN {} {}\r\n", u, p);
             stream.write_all(login_cmd.as_bytes()).await?;
-            let _ = stream.read(&mut buf).await?;
+            let len2 = stream.read(&mut buf).await?;
+            let l_resp = String::from_utf8_lossy(&buf[..len2]);
+            if !l_resp.contains("A1 OK") {
+                anyhow::bail!("IMAP LOGIN failed for user {}: {}", u, l_resp.trim());
+            }
 
             stream.write_all(b"A2 SELECT INBOX\r\n").await?;
             let _ = stream.read(&mut buf).await?;
 
             stream.write_all(b"A3 FETCH 1 BODY[]\r\n").await?;
+            response_bytes.clear();
             loop {
                 let n = stream.read(&mut buf).await?;
                 if n == 0 { break; }
@@ -957,18 +982,30 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
         "pop3" => {
             let mut buf = [0u8; 1024];
             let len = stream.read(&mut buf).await?;
-            response_bytes.extend_from_slice(&buf[..len]);
+            let greeting = String::from_utf8_lossy(&buf[..len]);
+            if !greeting.starts_with("+OK") {
+                anyhow::bail!("POP3 Server rejected connection: {}", greeting.trim());
+            }
 
             let user_auth = cli.user_auth.as_deref().unwrap_or("user:pass");
             let (u, p) = user_auth.split_once(':').unwrap_or(("user", "pass"));
 
             stream.write_all(format!("USER {}\r\n", u).as_bytes()).await?;
-            let _ = stream.read(&mut buf).await?;
+            let len2 = stream.read(&mut buf).await?;
+            let u_resp = String::from_utf8_lossy(&buf[..len2]);
+            if !u_resp.starts_with("+OK") {
+                anyhow::bail!("POP3 USER rejected: {}", u_resp.trim());
+            }
 
             stream.write_all(format!("PASS {}\r\n", p).as_bytes()).await?;
-            let _ = stream.read(&mut buf).await?;
+            let len3 = stream.read(&mut buf).await?;
+            let p_resp = String::from_utf8_lossy(&buf[..len3]);
+            if !p_resp.starts_with("+OK") {
+                anyhow::bail!("POP3 PASS rejected: {}", p_resp.trim());
+            }
 
             stream.write_all(b"RETR 1\r\n").await?;
+            response_bytes.clear();
             loop {
                 let n = stream.read(&mut buf).await?;
                 if n == 0 { break; }
@@ -978,7 +1015,10 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
         "smtp" => {
             let mut buf = [0u8; 1024];
             let len = stream.read(&mut buf).await?;
-            response_bytes.extend_from_slice(&buf[..len]);
+            let greeting = String::from_utf8_lossy(&buf[..len]);
+            if !greeting.starts_with("220") {
+                anyhow::bail!("SMTP Server rejected connection: {}", greeting.trim());
+            }
             let ehlo = crate::modules::smtp::SmtpProtocolEngine::build_ehlo_command("rcurl.client");
             stream.write_all(ehlo.as_bytes()).await?;
             let len2 = stream.read(&mut buf).await?;

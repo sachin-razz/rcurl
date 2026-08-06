@@ -1108,3 +1108,78 @@ fn test_ultra_hard_x509_asn1_der_strict_validation() {
     assert_eq!(cert_pem.lines().next().unwrap(), "-----BEGIN CERTIFICATE-----");
     assert_eq!(key_pem.lines().next().unwrap(), "-----BEGIN RSA PRIVATE KEY-----");
 }
+
+#[tokio::test]
+async fn test_e2e_live_ftp_protocol_flow() {
+    use tokio::net::TcpListener;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let server_task = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        socket.write_all(b"220 (rcurl-test-ftp 1.0)\r\n").await.unwrap();
+
+        let mut buf = [0u8; 512];
+        let n = socket.read(&mut buf).await.unwrap();
+        let cmd = String::from_utf8_lossy(&buf[..n]);
+        assert!(cmd.starts_with("USER admin"));
+        socket.write_all(b"331 Please specify password.\r\n").await.unwrap();
+
+        let n2 = socket.read(&mut buf).await.unwrap();
+        let cmd2 = String::from_utf8_lossy(&buf[..n2]);
+        assert!(cmd2.starts_with("PASS pass123"));
+        socket.write_all(b"230 Login successful.\r\n").await.unwrap();
+
+        let n3 = socket.read(&mut buf).await.unwrap();
+        let cmd3 = String::from_utf8_lossy(&buf[..n3]);
+        assert!(cmd3.starts_with("RETR file.txt"));
+        socket.write_all(b"150 Opening BINARY mode data connection.\r\n").await.unwrap();
+        socket.write_all(b"REAL_FTP_FILE_CONTENTS_12345").await.unwrap();
+    });
+
+    use clap::Parser;
+    let url = format!("ftp://127.0.0.1:{}/file.txt", port);
+    let cli = rcurl::cli::Cli::parse_from(vec!["rcurl", "-u", "admin:pass123", "-q", &url]);
+
+    rcurl::downloader::execute_native_protocol(&url, &cli).await.unwrap();
+    server_task.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_e2e_live_pop3_protocol_flow() {
+    use tokio::net::TcpListener;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let server_task = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        socket.write_all(b"+OK POP3 server ready\r\n").await.unwrap();
+
+        let mut buf = [0u8; 512];
+        let n = socket.read(&mut buf).await.unwrap();
+        let cmd = String::from_utf8_lossy(&buf[..n]);
+        assert!(cmd.starts_with("USER mailuser"));
+        socket.write_all(b"+OK User accepted\r\n").await.unwrap();
+
+        let n2 = socket.read(&mut buf).await.unwrap();
+        let cmd2 = String::from_utf8_lossy(&buf[..n2]);
+        assert!(cmd2.starts_with("PASS mailpass"));
+        socket.write_all(b"+OK Password accepted\r\n").await.unwrap();
+
+        let n3 = socket.read(&mut buf).await.unwrap();
+        let cmd3 = String::from_utf8_lossy(&buf[..n3]);
+        assert!(cmd3.starts_with("RETR 1"));
+        socket.write_all(b"+OK 120 octets\r\nREAL_POP3_EMAIL_PAYLOAD_BODY\r\n.\r\n").await.unwrap();
+    });
+
+    use clap::Parser;
+    let url = format!("pop3://127.0.0.1:{}", port);
+    let cli = rcurl::cli::Cli::parse_from(vec!["rcurl", "-u", "mailuser:mailpass", "-q", &url]);
+
+    rcurl::downloader::execute_native_protocol(&url, &cli).await.unwrap();
+    server_task.await.unwrap();
+}
