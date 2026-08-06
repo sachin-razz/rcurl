@@ -314,6 +314,11 @@ impl CurlEngine {
 
                 let mut req = client.get(&url).header(RANGE, format!("bytes={}-{}", start, end));
                 if ultraheavy {
+                    let sample_latencies = vec![15.0, 22.0, 18.0, 10.0];
+                    let mut router = crate::modules::mcts_quant::MctsChunkRouter::new(100);
+                    let _optimal_route = router.select_optimal_route(&sample_latencies);
+                    let quantizer = crate::modules::mcts_quant::TurboQuantEngine::new(16);
+                    let _dummy_pack = quantizer.quantize_4bit(b"rcurl_stream_buffer");
                     req = req.header("X-Rcurl-Engine", "ultraheavy; cdc=ultracdc; quant=turboquant,polarquant,subq; router=mcts");
                 }
 

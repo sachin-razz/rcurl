@@ -1,0 +1,40 @@
+[package]
+name = "rcurl"
+version = "1.0.0"
+edition = "2024"
+authors = ["Sachin Rajpurohit"]
+description = "16-Thread Tokio Streaming CLI Downloader (Pure Rust Native Engine + C libcurl Module)"
+readme = "README.md"
+license = "MIT"
+keywords = ["cli", "curl", "streaming", "tokio", "http2"]
+categories = ["command-line-utilities", "asynchronous"]
+
+[dependencies]
+tokio = { version = "1.43", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["stream", "json", "rustls-tls", "socks", "http2"] }
+curl = "0.4"
+futures-util = "0.3"
+clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+indicatif = { version = "0.17", features = ["tokio"] }
+colored = "3.0"
+anyhow = "1.0"
+sha2 = "0.10"
+md-5 = "0.10"
+hex = "0.4"
+dirs = "6.0"
+toml = "0.8"
+mimalloc = "0.1"
+filetime = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+overflow-checks = false
+debug = false
+rpath = false
