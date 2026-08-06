@@ -366,35 +366,67 @@ fn test_webdrive_engine_endpoints() {
 }
 
 #[test]
-fn test_subq_and_polarquant_engines() {
-    let subq = SubQEngine::new(4);
-    let sq = subq.quantize(b"Sub-Vector Quantization Test Payload");
-    assert_eq!(sq.sub_vector_dim, 4);
-    assert!(!sq.quantized_codes.is_empty());
-
-    let pq = PolarQuantEngine::new(256);
-    let polar = pq.quantize(b"Polar Coordinate Quantization Test Payload").unwrap();
-    assert!(polar.magnitude > 0.0);
-    assert!(!polar.quantized_angles.is_empty());
-}
-
-#[test]
 fn test_turboquant_vector_quantization() {
-    let tq = TurboQuantEngine::new(8);
-    let q = tq.quantize_bytes(b"Testing TurboQuant Vector Quantization");
-    assert_eq!(q.original_size, 38);
-    assert_eq!(q.quantized_bytes.len(), 38);
+    let tq = TurboQuantEngine::new(16);
+    let raw = vec![12u8; 1024];
+
+    // Real 4-bit bit-packing compression ratio test (50% exact reduction)
+    let packed_4bit = tq.quantize_4bit(&raw);
+    assert_eq!(packed_4bit.len(), 512);
+
+    let unpacked_4bit = tq.dequantize_4bit(&packed_4bit, 1024);
+    assert_eq!(unpacked_4bit.len(), 1024);
+
+    // Real 2-bit bit-packing compression ratio test (75% exact reduction)
+    let packed_2bit = tq.quantize_2bit(&raw);
+    assert_eq!(packed_2bit.len(), 256);
+
+    let unpacked_2bit = tq.dequantize_2bit(&packed_2bit, 1024);
+    assert_eq!(unpacked_2bit.len(), 1024);
+
+    // FWHT transform accuracy test
+    let mut floats = vec![1.0, 2.0, 3.0, 4.0];
+    let orig = floats.clone();
+    rcurl::modules::mcts_quant::fwht_transform(&mut floats);
+    rcurl::modules::mcts_quant::ifwht_transform(&mut floats);
+
+    for (a, b) in orig.iter().zip(floats.iter()) {
+        assert!((a - b).abs() < 0.001);
+    }
 }
 
 #[test]
 fn test_mcts_chunk_router_uct() {
-    let mut router = MctsChunkRouter::new();
-    router.update_route("route_a", 0.9);
-    router.update_route("route_a", 0.85);
+    let mut router = MctsChunkRouter::new(1000);
 
-    let routes = vec!["route_a".to_string(), "route_b".to_string()];
-    let chosen = router.select_best_route(&routes).unwrap();
-    assert_eq!(chosen, "route_b");
+    // Candidate network paths with varying latencies
+    let candidate_latencies_ms = vec![120.0, 45.0, 200.0, 8.5, 95.0];
+
+    // MCTS UCT search tree must converge on Route #3 (8.5 ms lowest-latency path)
+    let selected_route = router.select_optimal_route(&candidate_latencies_ms);
+    assert_eq!(selected_route, 3);
+}
+
+#[test]
+fn test_subq_and_polarquant_engines() {
+    let subq = SubQEngine::new(4);
+    let data = vec![10u8, 20, 30, 40, 50, 60, 70, 80];
+
+    // Jégou et al. IEEE TPAMI 2011 Product Quantization test
+    let pq_indices = subq.encode_product_quantization(&data);
+    assert_eq!(pq_indices.len(), 4);
+
+    let decoded = subq.decode_product_quantization(&pq_indices, 8);
+    assert_eq!(decoded.len(), 8);
+
+    // Polar Hyperspherical Quantization test
+    let polar = PolarQuantEngine::new(256, 256);
+    let (mags, angles) = polar.quantize_polar_coordinates(&data);
+    assert_eq!(mags.len(), 4);
+    assert_eq!(angles.len(), 4);
+
+    let reconstructed = polar.dequantize_polar_coordinates(&mags, &angles, 8);
+    assert_eq!(reconstructed.len(), 8);
 }
 
 #[test]
