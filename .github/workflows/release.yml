@@ -52,11 +52,12 @@ jobs:
 
       - name: Package Windows Release
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          mkdir dist
-          copy target\${{ matrix.target }}\release\rcurl.exe dist\
-          copy README.md dist\
-          tar -a -c -f ${{ matrix.archive_name }} -C dist *
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item target/${{ matrix.target }}/release/rcurl.exe dist/
+          Copy-Item README.md dist/
+          Compress-Archive -Path dist/* -DestinationPath ${{ matrix.archive_name }}
 
       - name: Upload Binary to GitHub Release
         uses: softprops/action-gh-release@v2
