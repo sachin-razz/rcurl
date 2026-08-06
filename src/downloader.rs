@@ -130,6 +130,13 @@ impl CurlEngine {
             cli.method.to_uppercase()
         };
 
+        if url.starts_with("ipfs://") {
+            let cid = url.trim_start_matches("ipfs://");
+            let ipfs_client = crate::modules::p2pmesh::IpfsNodeClient::new(cid);
+            let gateway_url = ipfs_client.build_ipfs_gateway_url();
+            return Box::pin(self.fetch_stream(&gateway_url, cli)).await;
+        }
+
         if url.starts_with("file://") || (!url.contains("://") && std::path::Path::new(url).exists()) {
             let file_path = url.trim_start_matches("file://");
             if let Ok(content) = fs::read(file_path).await {

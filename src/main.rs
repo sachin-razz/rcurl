@@ -168,6 +168,7 @@ async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) -> Result<()>
             } else if url.starts_with("http://")
                 || url.starts_with("https://")
                 || url.starts_with("file://")
+                || url.starts_with("ipfs://")
                 || (!url.contains("://") && std::path::Path::new(&url).exists())
             {
                 engine.execute_request(&url, &cli_ref).await
