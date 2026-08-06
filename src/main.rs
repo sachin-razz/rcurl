@@ -1,46 +1,18 @@
 mod cli;
 mod config;
 mod downloader;
-mod libcurl_engine;
 mod modules;
 mod pure_rust_engine;
 mod progress;
 mod telemetry;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 use cli::{parse_interval, Cli};
 use config::RcurlConfig;
 use colored::Colorize;
 use downloader::CurlEngine;
 use mimalloc::MiMalloc;
-use modules::altsvc::AltSvcCache;
-use modules::bittorrent::TorrentClient;
-use modules::conncache::ConnCache;
-use modules::cookie::CookieStore;
-use modules::ebpf_xdp::EbpfXdpEngine;
-use modules::fastcdc::FastCdcEngine;
-use modules::ftp::FtpProtocolEngine;
-use modules::grpc_rpc::{GrpcEngine, JsonRpcEngine, XmlRpcEngine};
-use modules::hsts::HstsCache;
-use modules::http::HttpProtocolEngine;
-use modules::mcts_quant::{MctsChunkRouter, TurboQuantEngine};
-use modules::memory_patterns::{PatternAMemoryEngine, PatternBMemoryEngine, PatternCMemoryEngine};
-use modules::mitm_proxy::MitmProxyDaemon;
-use modules::multicloud::MultiCloudEngine;
-use modules::multicast::OmniMulticastEngine;
-use modules::p2pmesh::{IpfsNodeClient, P2pMeshEngine};
-use modules::polar_subq::{PolarQuantEngine, SubQEngine};
-use modules::rsync::RsyncEngine;
-use modules::rsyncd_config::RsyncdConfig;
-use modules::socks::SocksProxyEngine;
-use modules::tor_i2p::TorI2pEngine;
-use modules::transfersh::{LocalStorage, TransferShServerDaemon};
-use modules::tui_dashboard::TuiDashboardEngine;
-use modules::ultracdc::UltraCdcEngine;
-use modules::webdrive::WebDriveEngine;
-use modules::ws::WebSocketEngine;
-use modules::zstd_dict::ZstdDictEngine;
 use std::fs;
 use std::sync::Arc;
 use std::time::Duration;
@@ -117,44 +89,10 @@ fn main() -> Result<()> {
 }
 
 async fn run_app(cli: Cli) -> Result<()> {
-    // Initialize Memory Pattern Engines A, B, C
-    let _pat_a = PatternAMemoryEngine::new(4096);
-    let _pat_b = PatternBMemoryEngine::<u8>::new();
-    let _pat_c = PatternCMemoryEngine::new("rcurl-mem");
-
-    // Initialize Network Caches & Security Policy Handlers
-    let _conn_cache = ConnCache::new();
-    let _cookie_store = CookieStore::new();
-    let _hsts = HstsCache::new();
-    let _altsvc = AltSvcCache::new();
-
-    // 1. Conditional Dispatch for Dedicated Server Daemons & TUI Dashboard
-    if cli.tui {
-        let mut dashboard = TuiDashboardEngine::new();
-        dashboard.enable();
-    }
-
-    if cli.mitm_proxy {
-        let daemon = MitmProxyDaemon::new(8080);
-        let addr = daemon.listen_address();
-        println!("{} TLS MITM Proxy Daemon listening at {}", "[SERVER]".bold().magenta(), addr.cyan());
-    }
-
-    if cli.transfer_server {
-        let _server = TransferShServerDaemon::new(8080, Box::new(LocalStorage::new(std::path::PathBuf::from("./storage"))));
-        println!("{} Transfer.sh Upload Server Daemon started on port 8080", "[SERVER]".bold().magenta());
-    }
-
-    if cli.ebpf_accelerator {
-        let _accelerator = EbpfXdpEngine::new("eth0");
-        println!("{} eBPF XDP Zero-Copy Socket Accelerator attached", "[eBPF]".bold().green());
-    }
-
-    if cli.tor || cli.i2p {
-        let mut tunnel = TorI2pEngine::new();
-        tunnel.tor_active = cli.tor;
-        tunnel.i2p_active = cli.i2p;
-        println!("{} Anonymity Tunnel configured (Tor: {}, I2P: {})", "[SECURITY]".bold().yellow(), cli.tor, cli.i2p);
+    if cli.urls.is_empty() && cli.input_file.is_none() {
+        eprintln!("rcurl: no URL specified");
+        eprintln!("Try 'rcurl --help' for more information.");
+        std::process::exit(2);
     }
 
     let engine = Arc::new(CurlEngine::new(&cli)?);
@@ -175,7 +113,7 @@ async fn run_app(cli: Cli) -> Result<()> {
                 );
             }
 
-            execute_all(&engine, &cli_arc).await;
+            execute_all(&engine, &cli_arc).await?;
             tokio::time::sleep(interval).await;
         }
     } else if let Some(ref watch_file_path) = cli_arc.watch_file {
@@ -190,7 +128,7 @@ async fn run_app(cli: Cli) -> Result<()> {
             .ok()
             .and_then(|m| m.modified().ok());
 
-        execute_all(&engine, &cli_arc).await;
+        execute_all(&engine, &cli_arc).await?;
 
         loop {
             tokio::time::sleep(Duration::from_millis(250)).await;
@@ -203,19 +141,19 @@ async fn run_app(cli: Cli) -> Result<()> {
                             "⚡ RE-TRIGGER:".bold().yellow(),
                             watch_file_path.display().to_string().cyan()
                         );
-                        execute_all(&engine, &cli_arc).await;
+                        execute_all(&engine, &cli_arc).await?;
                     }
                 }
             }
         }
     } else {
-        execute_all(&engine, &cli_arc).await;
+        execute_all(&engine, &cli_arc).await?;
     }
 
     Ok(())
 }
 
-async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) {
+async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) -> Result<()> {
     let mut tasks = Vec::new();
 
     for url in &cli_arc.urls {
@@ -224,71 +162,43 @@ async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) {
         let url = url.clone();
 
         tasks.push(tokio::spawn(async move {
-            // Protocol-specific runtime dispatch based on URL scheme or active CLI flags
-            if url.starts_with("s3://") || url.starts_with("gcs://") || url.starts_with("azure://") || url.starts_with("b2://") {
-                if let Ok(multicloud) = MultiCloudEngine::parse_cloud_uri(&url) {
-                    println!("{} Cloud Storage Sync: Bucket '{}'", "[CLOUD]".bold().cyan(), multicloud.bucket);
-                }
-            } else if url.starts_with("magnet:") || cli_ref.torrent {
-                let _bittorrent = TorrentClient::new("./");
-                println!("{} BitTorrent Swarm Client initialized for {}", "[P2P]".bold().green(), url);
-            } else if url.starts_with("ipfs://") {
-                let _ipfs = IpfsNodeClient::new(&url);
-                let _p2p = P2pMeshEngine::new("pin-1234");
-                println!("{} IPFS P2P Gateway fetching CID {}", "[IPFS]".bold().yellow(), url);
-            } else if url.starts_with("grpc://") || url.starts_with("grpcs://") {
-                let _frame = GrpcEngine::format_grpc_payload(b"protobuf_data");
-                let _json_rpc = JsonRpcEngine::new("method", vec![], 1);
-                let _xml_rpc = XmlRpcEngine::new("method");
-                println!("{} gRPC / RPC Engine initialized for {}", "[gRPC]".bold().blue(), url);
-            } else if url.starts_with("ws://") || url.starts_with("wss://") {
-                let _ws = WebSocketEngine::new();
-                println!("{} WebSocket Stream Connection initialized for {}", "[WS]".bold().cyan(), url);
-            } else if url.starts_with("ftp://") || url.starts_with("ftps://") {
-                let _ftp = FtpProtocolEngine::new(true);
-                println!("{} FTP Engine initialized for {}", "[FTP]".bold().green(), url);
-            } else if url.starts_with("http://") || url.starts_with("https://") {
-                let _http = HttpProtocolEngine::new();
-                let _webdrive = WebDriveEngine::new(None, None);
-                let _zstd = ZstdDictEngine::new(std::path::PathBuf::from("./dict"));
-                let _ = engine.execute_request(&url, &cli_ref).await;
-            } else if url.starts_with("rsync://") {
-                let _rsync = RsyncEngine::new();
-                let _rsyncd = RsyncdConfig::default();
-                println!("{} Rsync Engine initialized for {}", "[RSYNC]".bold().yellow(), url);
-            } else if cli_ref.omni_multicast || cli_ref.multicast_send.is_some() {
-                let multicast = OmniMulticastEngine::new();
-                println!("{} Omni-Multicast IGMPv3 Group: {}", "[MULTICAST]".bold().magenta(), multicast.format_igmpv3_join_group());
-            } else if cli_ref.proxy.as_ref().map_or(false, |p| p.starts_with("socks")) {
-                let _socks = SocksProxyEngine::new("127.0.0.1".to_string(), 1080);
-                let _ = engine.execute_request(&url, &cli_ref).await;
+            if url.starts_with("http://")
+                || url.starts_with("https://")
+                || url.starts_with("file://")
+                || (!url.contains("://") && std::path::Path::new(&url).exists())
+            {
+                engine.execute_request(&url, &cli_ref).await
             } else {
-                if cli_ref.fastcdc {
-                    let _cdc = FastCdcEngine::new(4096, 16384, 65536);
-                }
-                if cli_ref.ultracdc {
-                    let _ucdc = UltraCdcEngine::default();
-                }
-                if cli_ref.turboquant {
-                    let _tq = TurboQuantEngine::new(16);
-                }
-                if cli_ref.subq {
-                    let _sq = SubQEngine::new(4);
-                }
-                if cli_ref.polarquant {
-                    let _pq = PolarQuantEngine::new(256, 256);
-                }
-                if cli_ref.mcts_router {
-                    let _mcts = MctsChunkRouter::new(1000);
-                }
-                let _ = engine.execute_request(&url, &cli_ref).await;
+                Err(anyhow!(
+                    "Unsupported or unimplemented protocol scheme for URL: '{}'. rcurl currently supports http://, https://, and file:// protocols.",
+                    url
+                ))
             }
         }));
     }
 
+    let mut first_error = None;
     for task in tasks {
-        if let Err(err) = task.await {
-            eprintln!("Error executing request task: {:#}", err);
+        match task.await {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => {
+                eprintln!("{}: {:#}", "rcurl error".bold().red(), err);
+                if first_error.is_none() {
+                    first_error = Some(err);
+                }
+            }
+            Err(err) => {
+                eprintln!("{}: task join error {:#}", "rcurl error".bold().red(), err);
+                if first_error.is_none() {
+                    first_error = Some(anyhow::Error::from(err));
+                }
+            }
         }
+    }
+
+    if let Some(err) = first_error {
+        Err(err)
+    } else {
+        Ok(())
     }
 }

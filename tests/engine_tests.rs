@@ -655,7 +655,8 @@ fn test_quic_transport_engine() {
 #[test]
 fn test_basic_and_oauth_auth() {
     let basic_header = BasicAuth::build_header("admin", "secret123");
-    assert!(basic_header.starts_with("Basic "));
+    // RFC 7617: admin:secret123 -> Base64: YWRtaW46c2VjcmV0MTIz
+    assert_eq!(basic_header, "Basic YWRtaW46c2VjcmV0MTIz");
 
     let bearer_header = OAuth2Auth::build_bearer_header("token123xyz");
     assert_eq!(bearer_header, "Bearer token123xyz");

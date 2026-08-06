@@ -78,24 +78,41 @@ impl RsyncdConfig {
     }
 
     /// Parse rsyncd.conf file format
-    pub fn parse_file<P: AsRef<Path>>(file_path: P) -> Result<Self> {
-        let content = fs::read_to_string(&file_path)
-            .with_context(|| format!("Failed to read rsyncd.conf at {}", file_path.as_ref().display()))?;
-        Self::parse_str(&content, file_path.as_ref().parent())
+    pub fn parse_file(path: impl AsRef<Path>) -> Result<Self> {
+        Self::parse_file_with_depth(path, 0)
     }
 
-    /// Parse rsyncd.conf string content with &include and &merge support
+    pub fn parse_file_with_depth(path: impl AsRef<Path>, depth: usize) -> Result<Self> {
+        if depth > 10 {
+            anyhow::bail!("Rsyncd config include depth limit exceeded (max 10)");
+        }
+
+        let path = path.as_ref();
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read rsyncd.conf at {}", path.display()))?;
+        Self::parse_str_with_depth(&content, path.parent(), depth)
+    }
+
     pub fn parse_str(content: &str, parent_dir: Option<&Path>) -> Result<Self> {
+        Self::parse_str_with_depth(content, parent_dir, 0)
+    }
+
+    pub fn parse_str_with_depth(content: &str, parent_dir: Option<&Path>, depth: usize) -> Result<Self> {
+        if depth > 10 {
+            anyhow::bail!("Rsyncd config include depth limit exceeded (max 10)");
+        }
+
         let mut config = RsyncdConfig::default();
         let mut current_module: Option<RsyncdModule> = None;
 
-        for raw_line in content.lines() {
-            let line = raw_line.trim();
+        for line in content.lines() {
+            let line = line.trim();
+
             if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
                 continue;
             }
 
-            // Handle &include and &merge directives
+            // Handle &include and &merge directives with depth check
             if line.starts_with("&include") || line.starts_with("&merge") {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
@@ -107,7 +124,7 @@ impl RsyncdConfig {
                     };
 
                     if target_path.exists() && target_path.is_file() {
-                        if let Ok(sub_config) = Self::parse_file(&target_path) {
+                        if let Ok(sub_config) = Self::parse_file_with_depth(&target_path, depth + 1) {
                             for (name, module) in sub_config.modules {
                                 config.modules.insert(name, module);
                             }
@@ -194,7 +211,9 @@ impl RsyncdConfig {
                             continue;
                         }
                         if let Some((user, pass)) = l.split_once(':') {
-                            if user.trim() == username && pass.trim() == password {
+                            let u_match = constant_time_eq(user.trim().as_bytes(), username.as_bytes());
+                            let p_match = constant_time_eq(pass.trim().as_bytes(), password.as_bytes());
+                            if u_match && p_match {
                                 return true;
                             }
                         }
@@ -204,6 +223,17 @@ impl RsyncdConfig {
         }
         false
     }
+}
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut result = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        result |= x ^ y;
+    }
+    result == 0
 }
 
 fn parse_bool(val: &str) -> bool {

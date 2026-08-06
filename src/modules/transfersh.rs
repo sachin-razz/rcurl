@@ -255,7 +255,7 @@ impl ClamAvScanner {
         let addr = format!("{}:{}", self.host, self.port);
         let mut stream = match TcpStream::connect(&addr) {
             Ok(s) => s,
-            Err(_) => return Ok(true), // Skip scan if ClamAV daemon is unreachable
+            Err(err) => return Err(anyhow::anyhow!("ClamAV virus scanner daemon unreachable at {}: {}", addr, err)),
         };
 
         // ClamAV INSTREAM protocol header
