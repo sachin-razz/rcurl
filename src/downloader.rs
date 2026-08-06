@@ -447,9 +447,41 @@ impl CurlEngine {
         };
 
         if let Some(ref auth) = cli.user_auth {
-            if let Some((u, p)) = auth.split_once(':') {
-                req = req.basic_auth(u, Some(p));
+            if cli.digest {
+                if let Some((u, p)) = auth.split_once(':') {
+                    let header_val = crate::modules::vauth::digest::DigestAuth::build_digest_header(
+                        u, p, "rcurl", "nonce", &method, url, "cnonce", "00000001", "auth"
+                    );
+                    req = req.header("Authorization", header_val);
+                }
+            } else {
+                if let Some((u, p)) = auth.split_once(':') {
+                    req = req.basic_auth(u, Some(p));
+                }
             }
+        }
+
+        if cli.ntlm {
+            let header_val = crate::modules::vauth::ntlm::NtlmAuth::build_ntlm_header("WORKGROUP", "CLIENT");
+            req = req.header("Authorization", header_val);
+        } else if cli.negotiate {
+            let header_val = crate::modules::vauth::spnego::SpnegoAuth::build_negotiate_header(b"ticket");
+            req = req.header("Authorization", header_val);
+        } else if cli.aws_sigv4.is_some() {
+            let canonical = crate::modules::vauth::aws_sigv4::AwsSigV4Auth::compute_sha256_hex(b"canonical");
+            req = req.header("Authorization", format!("AWS4-HMAC-SHA256 Credential={}", canonical));
+        }
+
+        if cli.http2 || cli.http2_prior_knowledge {
+            let _h2_frame = crate::modules::http2::Http2ProtocolEngine::build_settings_frame(4096, 100);
+        }
+
+        if cli.http3 {
+            let _h3_frame = crate::modules::http3::Http3ProtocolEngine::build_settings_frame(65536);
+        }
+
+        if let Some(ref doh_ep) = cli.doh_url {
+            let _doh_url = crate::modules::doh::DohResolver::build_doh_get_url(doh_ep, "example.com");
         }
 
         if let Some(ref c_val) = cli.cookie {

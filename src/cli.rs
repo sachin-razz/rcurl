@@ -857,6 +857,26 @@ pub struct Cli {
     #[arg(long = "libcurl", aliases = ["use-libcurl"])]
     pub use_libcurl: bool,
 
+    /// Use HTTP Digest Authentication
+    #[arg(long = "digest")]
+    pub digest: bool,
+
+    /// Use HTTP NTLM Authentication
+    #[arg(long = "ntlm")]
+    pub ntlm: bool,
+
+    /// Use HTTP Negotiate (SPNEGO/Kerberos) Authentication
+    #[arg(long = "negotiate")]
+    pub negotiate: bool,
+
+    /// Use AWS SigV4 Authentication
+    #[arg(long = "aws-sigv4", value_name = "PROVIDER")]
+    pub aws_sigv4: Option<String>,
+
+    /// DNS-over-HTTPS Endpoint URL
+    #[arg(long = "doh-url", value_name = "URL")]
+    pub doh_url: Option<String>,
+
     /// Restrict maximum download speed (e.g. --rate-limit 5M, 500K)
     #[arg(long = "rate-limit", value_name = "SPEED")]
     pub rate_limit: Option<String>,
@@ -912,10 +932,6 @@ pub struct Cli {
     /// Prioritize HTTP/3 QUIC transport
     #[arg(long = "http3")]
     pub http3: bool,
-
-    /// DNS Over HTTPS (DoH) URL
-    #[arg(long = "doh-url", value_name = "URL")]
-    pub doh_url: Option<String>,
 
     /// Custom host resolution mapping (--resolve host:port:address)
     #[arg(long = "resolve", value_name = "HOST:PORT:ADDR")]
