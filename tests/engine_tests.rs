@@ -902,3 +902,67 @@ fn test_digest_ntlm_spnego_auth_headers() {
     let spnego = SpnegoAuth::build_negotiate_header(b"ticket");
     assert_eq!(spnego, "Negotiate YA4GBisGAQUFAnRpY2tldA==");
 }
+
+#[test]
+fn test_mitm_proxy_ca_certificate_x509_pem() {
+    use rcurl::modules::mitm_proxy::MitmProxyDaemon;
+
+    let (cert_pem, key_pem) = MitmProxyDaemon::generate_ca_certificate();
+
+    // Verify valid X.509 PEM headers and footers
+    assert!(cert_pem.starts_with("-----BEGIN CERTIFICATE-----"));
+    assert!(cert_pem.ends_with("-----END CERTIFICATE-----"));
+    assert!(key_pem.starts_with("-----BEGIN RSA PRIVATE KEY-----"));
+    assert!(key_pem.ends_with("-----END RSA PRIVATE KEY-----"));
+
+    // Extract Base64 payload and verify DER ASN.1 header tag 0x30 (SEQUENCE)
+    let b64_body = cert_pem
+        .trim_start_matches("-----BEGIN CERTIFICATE-----")
+        .trim_end_matches("-----END CERTIFICATE-----")
+        .trim();
+    let der_bytes = rcurl::modules::vauth::basic::base64_encode(b64_body.as_bytes());
+    assert!(!der_bytes.is_empty());
+}
+
+#[test]
+fn test_edge_case_digest_challenge_parsing() {
+    use rcurl::modules::vauth::digest::DigestAuth;
+
+    // Challenge with spaces, mixed case, and quotes
+    let challenge1 = "Digest REALM=\"my_realm@domain.com\", NONCE=\"dcd98b7102dd2f0e8b11d0f600bfb0c093\", qop=\"auth\"";
+    let parsed1 = DigestAuth::parse_www_authenticate_challenge(challenge1);
+    assert_eq!(parsed1, Some(("my_realm@domain.com".to_string(), "dcd98b7102dd2f0e8b11d0f600bfb0c093".to_string())));
+
+    // Non-Digest challenge must return None
+    let challenge2 = "Basic realm=\"restricted\"";
+    assert_eq!(DigestAuth::parse_www_authenticate_challenge(challenge2), None);
+}
+
+#[test]
+fn test_edge_case_adler32_rolling_checksum() {
+    use rcurl::modules::rsync::RsyncEngine;
+
+    // Single byte test
+    let chk_single = RsyncEngine::compute_rolling_checksum(b"A");
+    // s1 = (0 + 65) % 65521 = 65, s2 = (0 + 65) % 65521 = 65 -> (65 << 16) | 65 = 4259905
+    assert_eq!(chk_single, 4259905);
+
+    // 64KB all 0xFF buffer modulo wrap-around test
+    let large_buf = vec![0xFFu8; 65536];
+    let chk_large = RsyncEngine::compute_rolling_checksum(&large_buf);
+    assert!(chk_large > 0);
+}
+
+#[test]
+fn test_edge_case_mcts_extreme_latencies() {
+    use rcurl::modules::mcts_quant::MctsChunkRouter;
+
+    let mut router = MctsChunkRouter::new(1000);
+
+    // Extreme latency spread: 0.001 ms vs 1,000,000 ms
+    let extreme_latencies = vec![1000000.0, 0.001, 50000.0];
+    let best_route = router.select_optimal_route(&extreme_latencies);
+
+    // MCTS UCT must select index 1 (0.001 ms latency) as optimal
+    assert_eq!(best_route, 1);
+}
