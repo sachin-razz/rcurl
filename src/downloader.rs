@@ -790,6 +790,7 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
     let default_port = match scheme {
         "ftp" | "ftps" => 21,
         "ssh" | "scp" | "sftp" => 22,
+        "smtp" => 25,
         "rtsp" => 554,
         "smb" => 445,
         "telnet" => 23,
@@ -895,6 +896,15 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
             let len2 = stream.read(&mut buf).await?;
             response_bytes.extend_from_slice(&buf[..len2]);
         }
+        "smtp" => {
+            let mut buf = [0u8; 1024];
+            let len = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len]);
+            let ehlo = crate::modules::smtp::SmtpProtocolEngine::build_ehlo_command("rcurl.client");
+            stream.write_all(ehlo.as_bytes()).await?;
+            let len2 = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len2]);
+        }
         "mqtt" => {
             let connect_pkt = crate::modules::mqtt::MqttProtocolEngine::build_connect_packet("rcurl", 60);
             stream.write_all(&connect_pkt).await?;
@@ -903,6 +913,25 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
             response_bytes.extend_from_slice(&buf[..len]);
         }
         _ => {}
+    }
+
+    let thread_count = if cli.ultraheavy { 16 } else { cli.threads.max(1) };
+    if thread_count > 1 {
+        let mut tasks = Vec::new();
+        let addr_clone = addr.clone();
+        for i in 0..thread_count {
+            let target_addr = addr_clone.clone();
+            tasks.push(tokio::spawn(async move {
+                if let Ok(mut worker_stream) = TcpStream::connect(&target_addr).await {
+                    let mut buf = [0u8; 512];
+                    let _ = worker_stream.read(&mut buf).await;
+                }
+                i
+            }));
+        }
+        for task in tasks {
+            let _ = task.await;
+        }
     }
 
     if cli.ultraheavy {

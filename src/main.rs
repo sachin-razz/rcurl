@@ -177,6 +177,7 @@ async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) -> Result<()>
                 || url.starts_with("ssh://")
                 || url.starts_with("scp://")
                 || url.starts_with("sftp://")
+                || url.starts_with("smtp://")
                 || url.starts_with("rtsp://")
                 || url.starts_with("smb://")
                 || url.starts_with("telnet://")
@@ -188,7 +189,7 @@ async fn execute_all(engine: &Arc<CurlEngine>, cli_arc: &Arc<Cli>) -> Result<()>
                 crate::downloader::execute_native_protocol(&url, &cli_ref).await
             } else {
                 Err(anyhow!(
-                    "Unsupported or unimplemented protocol scheme for URL: '{}'. rcurl supports http://, https://, file://, ftp://, ssh://, scp://, sftp://, rtsp://, smb://, telnet://, tftp://, imap://, pop3://, and mqtt://.",
+                    "Unsupported or unimplemented protocol scheme for URL: '{}'. rcurl supports http://, https://, file://, ftp://, ssh://, scp://, sftp://, smtp://, rtsp://, smb://, telnet://, tftp://, imap://, pop3://, and mqtt://.",
                     url
                 ))
             }
