@@ -702,3 +702,97 @@ async fn test_pure_rust_file_download() {
     let _ = std::fs::remove_file(temp_file);
     let _ = std::fs::remove_file(out_file);
 }
+
+#[test]
+fn test_edge_case_odd_and_empty_buffer_bitpacking() {
+    let tq = TurboQuantEngine::new(16);
+
+    // 0-byte empty buffer
+    let empty_packed = tq.quantize_4bit(&[]);
+    assert!(empty_packed.is_empty());
+    assert!(tq.dequantize_4bit(&empty_packed, 0).is_empty());
+
+    // 1-byte odd buffer
+    let odd_1 = vec![255u8];
+    let packed_1 = tq.quantize_4bit(&odd_1);
+    assert_eq!(packed_1.len(), 1);
+    let unpacked_1 = tq.dequantize_4bit(&packed_1, 1);
+    assert_eq!(unpacked_1.len(), 1);
+
+    // 3-byte odd buffer
+    let odd_3 = vec![100u8, 200u8, 150u8];
+    let packed_3 = tq.quantize_4bit(&odd_3);
+    assert_eq!(packed_3.len(), 2);
+    let unpacked_3 = tq.dequantize_4bit(&packed_3, 3);
+    assert_eq!(unpacked_3.len(), 3);
+
+    // 2-bit packing on 3-byte odd buffer
+    let packed_2bit = tq.quantize_2bit(&odd_3);
+    assert_eq!(packed_2bit.len(), 1);
+    let unpacked_2bit = tq.dequantize_2bit(&packed_2bit, 3);
+    assert_eq!(unpacked_2bit.len(), 3);
+}
+
+#[test]
+fn test_edge_case_mcts_uct_noisy_latencies_and_zero_visits() {
+    let mut router = MctsChunkRouter::new(500);
+
+    // Edge case latencies: zero, negative, and extreme noise
+    let noisy_latencies = vec![0.0, -5.0, 150.0, 12.0, 0.1];
+    let selected_route = router.select_optimal_route(&noisy_latencies);
+    assert!(selected_route < noisy_latencies.len());
+
+    // Single route edge case
+    let single_route = vec![42.0];
+    assert_eq!(router.select_optimal_route(&single_route), 0);
+
+    // Empty route edge case
+    let empty_routes: Vec<f64> = Vec::new();
+    assert_eq!(router.select_optimal_route(&empty_routes), 0);
+}
+
+#[test]
+fn test_edge_case_product_quantization_odd_dimensions() {
+    let subq = SubQEngine::new(4);
+
+    // 13-byte buffer (broken into 3-byte subspace chunks yields 5 sub-vector blocks)
+    let data_13 = vec![10u8, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130];
+    let pq_indices = subq.encode_product_quantization(&data_13);
+    assert_eq!(pq_indices.len(), 5);
+
+    let decoded = subq.decode_product_quantization(&pq_indices, 13);
+    assert_eq!(decoded.len(), 13);
+}
+
+#[test]
+fn test_edge_case_polar_coordinates_quadrants_and_zero_vectors() {
+    let polar = PolarQuantEngine::new(256, 256);
+
+    // Origin (0, 0) and Quadrant II, III, IV negative coordinates
+    let data = vec![0u8, 0, 200, 50, 10, 250];
+    let (mags, angles) = polar.quantize_polar_coordinates(&data);
+    assert_eq!(mags.len(), 3);
+    assert_eq!(angles.len(), 3);
+
+    let reconstructed = polar.dequantize_polar_coordinates(&mags, &angles, 6);
+    assert_eq!(reconstructed.len(), 6);
+}
+
+#[test]
+fn test_edge_case_bundled_wget_short_flags_with_values() {
+    let args = vec![
+        "rcurl", "-r", "-m", "-p", "-E", "-k", "--no-parent",
+        "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        "--rate-limit=500k", "--max-time=60",
+        "https://example.com/site/"
+    ];
+    let cli = Box::new(Cli::try_parse_from(args).unwrap());
+    assert!(cli.recursive);
+    assert!(cli.mirror);
+    assert!(cli.page_requisites);
+    assert!(cli.html_extension);
+    assert!(cli.insecure);
+    assert!(cli.no_parent);
+    assert_eq!(cli.rate_limit, Some("500k".to_string()));
+    assert_eq!(cli.timeout, Some(60));
+}
