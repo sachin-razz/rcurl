@@ -56,21 +56,32 @@ impl CurlEngine {
             builder = builder.http2_prior_knowledge();
         }
 
-        // Configure Proxy (support -x, --proxy, --socks5, --socks5-hostname, --proxy-user / -U, --proxy-header)
-        if let Some(ref proxy_url) = cli.proxy.as_ref().or(cli.socks5.as_ref()).or(cli.socks5_hostname.as_ref()) {
-            let p_str = if proxy_url.contains("://") {
-                proxy_url.to_string()
-            } else {
-                format!("http://{}", proxy_url)
-            };
-            let mut proxy = Proxy::all(&p_str)
-                .with_context(|| format!("Failed to configure proxy {}", p_str))?;
-            if let Some(ref p_user) = cli.proxy_auth {
-                if let Some((u, p)) = p_user.split_once(':') {
-                    proxy = proxy.basic_auth(u, p);
+        // Configure Proxy with NO_PROXY check & proxy authentication
+        let effective_proxy_auth = cli.proxy_auth.clone()
+            .or_else(|| {
+                match (&cli.proxy_user_wget, &cli.proxy_password) {
+                    (Some(u), Some(p)) => Some(format!("{}:{}", u, p)),
+                    (Some(u), None) => Some(u.clone()),
+                    _ => None,
                 }
+            });
+
+        if !cli.no_proxy {
+            if let Some(ref proxy_url) = cli.proxy.as_ref().or(cli.socks5.as_ref()).or(cli.socks5_hostname.as_ref()) {
+                let p_str = if proxy_url.contains("://") {
+                    proxy_url.to_string()
+                } else {
+                    format!("http://{}", proxy_url)
+                };
+                let mut proxy = Proxy::all(&p_str)
+                    .with_context(|| format!("Failed to configure proxy {}", p_str))?;
+                if let Some(ref p_user) = effective_proxy_auth {
+                    if let Some((u, p)) = p_user.split_once(':') {
+                        proxy = proxy.basic_auth(u, p);
+                    }
+                }
+                builder = builder.proxy(proxy);
             }
-            builder = builder.proxy(proxy);
         }
 
         if let Some(ref ua) = cli.user_agent {
@@ -495,9 +506,27 @@ impl CurlEngine {
             _ => self.client.get(url),
         };
 
-        if let Some(ref auth) = cli.user_auth {
+        let effective_user_auth = cli.user_auth.clone()
+            .or_else(|| {
+                match (&cli.http_user, &cli.http_passwd) {
+                    (Some(u), Some(p)) => Some(format!("{}:{}", u, p)),
+                    (Some(u), None) => Some(u.clone()),
+                    _ => None,
+                }
+            })
+            .or_else(|| {
+                match (&cli.wget_user, &cli.wget_password) {
+                    (Some(u), Some(p)) => Some(format!("{}:{}", u, p)),
+                    (Some(u), None) => Some(u.clone()),
+                    _ => None,
+                }
+            });
+
+        if let Some(ref auth) = effective_user_auth {
             if let Some((u, p)) = auth.split_once(':') {
                 req = req.basic_auth(u, Some(p));
+            } else {
+                req = req.basic_auth(auth.as_str(), Some(""));
             }
         }
 
