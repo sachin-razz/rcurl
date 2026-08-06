@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use colored::Colorize;
 use futures_util::StreamExt;
 use md5::Md5;
-use reqwest::header::{HeaderName, HeaderValue, ACCEPT_RANGES, CONTENT_LENGTH, COOKIE, RANGE, REFERER};
+use reqwest::header::{HeaderName, HeaderValue, ACCEPT_RANGES, CONTENT_LENGTH, COOKIE, RANGE, REFERER, USER_AGENT};
 use reqwest::{Client, Proxy};
 use sha2::{Digest, Sha256};
 #[cfg(unix)]
@@ -540,6 +540,10 @@ impl CurlEngine {
 
         if let Some(ref r_val) = cli.referer {
             req = req.header(REFERER, r_val);
+        }
+
+        if let Some(ref ua_val) = cli.user_agent {
+            req = req.header(USER_AGENT, ua_val);
         }
 
         for h in &cli.headers {
