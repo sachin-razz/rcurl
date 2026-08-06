@@ -15,8 +15,9 @@ pub struct MitmProxyDaemon {
 #[allow(dead_code)]
 impl MitmProxyDaemon {
     pub fn new(port: u16) -> Self {
+        let available_port = crate::modules::port_engine::PortEngine::resolve_available_port(port);
         Self {
-            port,
+            port: available_port,
             active_logs: Arc::new(Mutex::new(Vec::new())),
         }
     }

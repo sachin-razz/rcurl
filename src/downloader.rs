@@ -499,7 +499,7 @@ impl CurlEngine {
         if let Some(ref aws_param) = cli.aws_sigv4 {
             let parts: Vec<&str> = aws_param.split(':').collect();
             let access_key = parts.first().copied().unwrap_or("AKIAEXAMPLE");
-            let _secret_key = parts.get(1).copied().unwrap_or("SECRETKEY");
+            let secret_key = parts.get(1).copied().unwrap_or("SECRETKEY");
             let region = parts.get(2).copied().unwrap_or("us-east-1");
             let service = parts.get(3).copied().unwrap_or("s3");
 
@@ -522,7 +522,8 @@ impl CurlEngine {
             let string_to_sign = crate::modules::aws_sigv4::AwsSigV4Signer::build_string_to_sign(
                 &date_full, &cred_scope, &req_hash
             );
-            let signature = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(string_to_sign.as_bytes());
+            let signing_key = crate::modules::aws_sigv4::AwsSigV4Signer::derive_signing_key(secret_key, &date_short, region, service);
+            let signature = crate::modules::aws_sigv4::AwsSigV4Signer::calculate_signature(&signing_key, &string_to_sign);
 
             let auth_header = format!("AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders=host, Signature={}", access_key, cred_scope, signature);
             req = req.header("Authorization", auth_header);
@@ -848,11 +849,27 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
             let mut buf = [0u8; 1024];
             let len = stream.read(&mut buf).await?;
             response_bytes.extend_from_slice(&buf[..len]);
-            let user = cli.user_auth.as_deref().unwrap_or("anonymous:guest");
-            let user_cmd = format!("USER {}\r\n", user.split(':').next().unwrap_or("anonymous"));
-            stream.write_all(user_cmd.as_bytes()).await?;
+            let user_auth = cli.user_auth.as_deref().unwrap_or("anonymous:guest");
+            let (u, p) = user_auth.split_once(':').unwrap_or((user_auth, "guest"));
+            
+            stream.write_all(format!("USER {}\r\n", u).as_bytes()).await?;
             let len2 = stream.read(&mut buf).await?;
             response_bytes.extend_from_slice(&buf[..len2]);
+
+            stream.write_all(format!("PASS {}\r\n", p).as_bytes()).await?;
+            let len3 = stream.read(&mut buf).await?;
+            response_bytes.extend_from_slice(&buf[..len3]);
+
+            let filename = parsed_url.path().trim_start_matches('/');
+            let retr_cmd = if filename.is_empty() { "NLST\r\n".to_string() } else { format!("RETR {}\r\n", filename) };
+            stream.write_all(retr_cmd.as_bytes()).await?;
+            
+            // Loop reading stream until EOF
+            loop {
+                let n = stream.read(&mut buf).await?;
+                if n == 0 { break; }
+                response_bytes.extend_from_slice(&buf[..n]);
+            }
         }
         "rtsp" => {
             let mut rtsp = crate::modules::rtsp::RtspProtocolEngine::new();
@@ -881,21 +898,44 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
             let mut buf = [0u8; 1024];
             let len = stream.read(&mut buf).await?;
             response_bytes.extend_from_slice(&buf[..len]);
-            let mut imap = crate::modules::imap::ImapProtocolEngine::new();
-            let cmd = imap.format_fetch_headers("1:*");
-            stream.write_all(cmd.as_bytes()).await?;
-            let len2 = stream.read(&mut buf).await?;
-            response_bytes.extend_from_slice(&buf[..len2]);
+
+            let user_auth = cli.user_auth.as_deref().unwrap_or("user:pass");
+            let (u, p) = user_auth.split_once(':').unwrap_or(("user", "pass"));
+
+            let login_cmd = format!("A1 LOGIN {} {}\r\n", u, p);
+            stream.write_all(login_cmd.as_bytes()).await?;
+            let _ = stream.read(&mut buf).await?;
+
+            stream.write_all(b"A2 SELECT INBOX\r\n").await?;
+            let _ = stream.read(&mut buf).await?;
+
+            stream.write_all(b"A3 FETCH 1 BODY[]\r\n").await?;
+            loop {
+                let n = stream.read(&mut buf).await?;
+                if n == 0 { break; }
+                response_bytes.extend_from_slice(&buf[..n]);
+            }
         }
         "pop3" => {
             let mut buf = [0u8; 1024];
             let len = stream.read(&mut buf).await?;
             response_bytes.extend_from_slice(&buf[..len]);
-            let pop3 = crate::modules::pop3::Pop3ProtocolEngine::new();
-            let cmd = pop3.format_list(None);
-            stream.write_all(cmd.as_bytes()).await?;
-            let len2 = stream.read(&mut buf).await?;
-            response_bytes.extend_from_slice(&buf[..len2]);
+
+            let user_auth = cli.user_auth.as_deref().unwrap_or("user:pass");
+            let (u, p) = user_auth.split_once(':').unwrap_or(("user", "pass"));
+
+            stream.write_all(format!("USER {}\r\n", u).as_bytes()).await?;
+            let _ = stream.read(&mut buf).await?;
+
+            stream.write_all(format!("PASS {}\r\n", p).as_bytes()).await?;
+            let _ = stream.read(&mut buf).await?;
+
+            stream.write_all(b"RETR 1\r\n").await?;
+            loop {
+                let n = stream.read(&mut buf).await?;
+                if n == 0 { break; }
+                response_bytes.extend_from_slice(&buf[..n]);
+            }
         }
         "smtp" => {
             let mut buf = [0u8; 1024];
@@ -914,25 +954,6 @@ pub async fn execute_native_protocol(url: &str, cli: &Cli) -> Result<()> {
             response_bytes.extend_from_slice(&buf[..len]);
         }
         _ => {}
-    }
-
-    let thread_count = if cli.ultraheavy { 16 } else { cli.threads.max(1) };
-    if thread_count > 1 {
-        let mut tasks = Vec::new();
-        let addr_clone = addr.clone();
-        for i in 0..thread_count {
-            let target_addr = addr_clone.clone();
-            tasks.push(tokio::spawn(async move {
-                if let Ok(mut worker_stream) = TcpStream::connect(&target_addr).await {
-                    let mut buf = [0u8; 512];
-                    let _ = worker_stream.read(&mut buf).await;
-                }
-                i
-            }));
-        }
-        for task in tasks {
-            let _ = task.await;
-        }
     }
 
     if cli.ultraheavy {
