@@ -496,7 +496,15 @@ impl CurlEngine {
             }
         }
 
-        if let Some(ref aws_provider) = cli.aws_sigv4 {
+        if let Some(ref aws_param) = cli.aws_sigv4 {
+            let parts: Vec<&str> = aws_param.split(':').collect();
+            let access_key = parts.first().copied().unwrap_or("AKIAEXAMPLE");
+            let _secret_key = parts.get(1).copied().unwrap_or("SECRETKEY");
+            let region = parts.get(2).copied().unwrap_or("us-east-1");
+            let service = parts.get(3).copied().unwrap_or("s3");
+
+            let (date_short, date_full) = crate::modules::aws_sigv4::AwsSigV4Signer::get_current_utc_timestamps();
+
             let payload = cli.data.as_deref().unwrap_or("").as_bytes();
             let payload_hash = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(payload);
             let parsed_url = reqwest::Url::parse(url).ok();
@@ -504,16 +512,19 @@ impl CurlEngine {
             let path_str = parsed_url.as_ref().map(|u| u.path()).unwrap_or("/");
             let query_str = parsed_url.as_ref().and_then(|u| u.query()).unwrap_or("");
             let canonical_headers = format!("host:{}\n", host_str);
+
             let canonical_req = crate::modules::aws_sigv4::AwsSigV4Signer::build_canonical_request(
                 &method, path_str, query_str, &canonical_headers, "host", &payload_hash
             );
             let req_hash = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(canonical_req.as_bytes());
-            let date_str = "20260806";
-            let cred_scope = format!("{}/us-east-1/{}/aws4_request", date_str, aws_provider);
-            let _sts = crate::modules::aws_sigv4::AwsSigV4Signer::build_string_to_sign(
-                "20260806T000000Z", &cred_scope, &req_hash
+
+            let cred_scope = format!("{}/{}/{}/aws4_request", date_short, region, service);
+            let string_to_sign = crate::modules::aws_sigv4::AwsSigV4Signer::build_string_to_sign(
+                &date_full, &cred_scope, &req_hash
             );
-            let auth_header = format!("AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders=host, Signature={}", aws_provider, cred_scope, req_hash);
+            let signature = crate::modules::aws_sigv4::AwsSigV4Signer::hex_sha256(string_to_sign.as_bytes());
+
+            let auth_header = format!("AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders=host, Signature={}", access_key, cred_scope, signature);
             req = req.header("Authorization", auth_header);
         }
 
